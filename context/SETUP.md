@@ -112,6 +112,47 @@ it isn't a bottleneck.
 Also audit **LIBERO-Plus** and **LIBERO-Pro** for existing perturbation harnesses
 before writing an injector. 90 minutes, potentially saves ~2 weeks of Phase 1.
 
+## Backing up raw results
+
+**The rollout is one-shot and the grid cannot be re-run after January, so the raw
+rows are the only irreplaceable artifact in this project.** They live in `logs/`,
+which is gitignored — meaning that by default they exist on exactly one local
+disk with no redundancy. That is the single largest unforced risk here. Fix it
+before the first row is written, not after.
+
+Two tiers, because the artifacts differ by four orders of magnitude in size:
+
+**Tier 1 — per-episode tables (small, committed to git).** Tables A/B/C rows are
+plain JSONL. Even at the full Phase-2 grid this is megabytes, not gigabytes.
+Gzip them into `logs/archive/` and commit — `.gitignore` already exempts
+`logs/archive/*.jsonl.gz`. Git then gives you versioning, offsite redundancy via
+the remote, and tamper-evident timestamps that reinforce the data-book claim.
+
+```bash
+gzip -kc logs/<run_id>.jsonl > logs/archive/<run_id>.jsonl.gz
+```
+
+Keep `logs/archive/MANIFEST.md` as a one-line-per-run index: run ID, date, git
+commit of the code, row count, and what the run was. It is also committed.
+
+**Tier 2 — trajectory blobs (large, cloud).** `intermediate_state_ref` targets,
+video, and checkpoints are far too large for git.
+
+- Destination: `TBD` — **deliberately unset**, because it likely wants to be the
+  same provider as the compute stack, which is still open (see `STATUS.md`,
+  resolving 2026-07-28). Fill this in as part of that decision.
+- Sync command: `TBD`
+
+**The rule: back up before the next run starts, not at end of session.** A
+session that crashes mid-grid is exactly when you lose the rows you care about
+most. This is a CLAUDE.md invariant.
+
+**Restore test.** Once, before Phase 1 bulk runs: delete a local run, restore it
+from the archive, and confirm the analysis reproduces. An untested backup is a
+belief, not a backup.
+
+- Restore test performed: `TBD`
+
 ## Cloud
 
 **Undecided.** No provider has been chosen — AWS, RunPod, Kaggle, Vast, and Colab
@@ -122,6 +163,35 @@ section in once the decision is made and log the reasoning in `DECISIONS.md`.
 local, and the cost model was paper work. LIBERO (Week 2) is the first thing that
 actually needs a GPU. If you catch yourself sinking hours into cloud setup before
 DP evaluates locally, that's a signal you've drifted off the critical path.
+
+### Prior analysis — inputs, **not** a decision
+
+Worked through on 2026-07-20 and recovered from the Phase-0 chat on 2026-07-27.
+Recorded here so tomorrow's decision starts from this rather than re-deriving it.
+**None of it is binding** — the stack was explicitly reopened (see `LOG.md`
+2026-07-27), and a decision entry claiming otherwise was removed as false.
+
+- **The layered shape that was on the table:** a low-friction *interactive* layer
+  (Kaggle free tier for dev iteration, RunPod for training and interactive
+  rollouts) plus a separate *bulk* sink for the Phase-2 grid (~200–400 GPU-hr,
+  embarrassingly parallel, fire-and-forget). The two layers have genuinely
+  different requirements and do not have to be the same provider.
+- **SageMaker was ruled out, and free credits do not revive it.** The objections
+  are structural, not financial: the job-submission model, the managed markup,
+  idle billing, and the custom-container requirement. If AWS is used at all, the
+  shape is plain EC2 spot plus a checkpoint-resume wrapper — which is the right
+  shape for interruptible bulk rollouts anyway.
+- **Where free AWS credits actually pay off:** the bulk sink only. That is the one
+  place cost and friction point the same direction — setup amortizes over one big
+  batch, and the work is not interactive. Free credits do *not* justify moving the
+  interactive layer to EC2, because the VPC / security group / key pair / AMI /
+  EBS / spot-request tax is recurring and lands on the resource you have least of.
+- **The hinge is credit pool SIZE and EXPIRY** — the recommendation flips on it.
+  Four figures and lasting past January ⇒ EC2 spot is a good bulk sink. Roughly
+  $100 (Educate-style) or expiring early ⇒ the credits cannot cover a 200–400
+  GPU-hr grid, so you would pay the setup tax, exhaust the pool mid-grid, and end
+  up paying anyway — strictly worse than not using AWS at all. **Find the number
+  before committing, not in November.**
 
 Two things worth carrying into the decision regardless of who wins:
 

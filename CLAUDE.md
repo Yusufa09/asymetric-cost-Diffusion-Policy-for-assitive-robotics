@@ -72,6 +72,14 @@ disturbances — and evaluate under asymmetric cost, which none of them do."*
   optional extensions and must never become load-bearing.
 - **`intermediate_state_ref` every step** or the Phase-4 recoverability stretch
   dies silently.
+- **Raw rows are backed up before the next run starts.** `logs/` is gitignored;
+  an unbacked-up result is one disk failure from unrecoverable. See `SETUP.md`
+  § Backing up raw results.
+- **A checkbox is checked only against a named artifact** — a file path, a commit
+  hash, or a printed number. Otherwise write "attempted, blocked on X." Never
+  invent a number, a result, or a task ID; unknown is `TBD`. Prose claiming
+  progress while checkboxes said otherwise has already bitten this project twice
+  (AWS credits, LIBERO task IDs).
 - Source of truth is append-only JSONL/CSV, not W&B.
 
 ## Context files

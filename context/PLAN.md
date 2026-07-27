@@ -84,7 +84,7 @@ Capacity dips: Thanksgiving (Wk 19), winter break (Wk 23–24), January assessme
 
 - **Wk 5:** Object-shift injector (headline), parameterized by magnitude × onset step. PushT first, then LIBERO. (If the Wk-2 audit found a harness, this is mostly integration.)
 - **Wk 6:** Add occlusion and delayed observation. Confirm each degrades success monotonically with magnitude — this sanity check is itself a result.
-- **Wk 7:** Implement the inter-chunk consistency signal. One extra forward pass at decision points only. Log raw signal every step. (Also implement K-sample dispersion for the demo meter — PushT only.)
+- **Wk 7:** Implement the inter-chunk consistency signal. One extra forward pass at decision points only. Log raw signal every step. (Also implement K-sample dispersion for the demo meter — PushT only.) **Normalize action dimensions using the policy's own action normalization before measuring any spread or chunk-to-chunk distance** — raw action dims have different scales (gripper bit vs. large translation), so an unnormalized signal is dominated by whichever dimension has the biggest raw units and the number means nothing. Cheap to get right now, invisible and expensive later.
 - **Wk 8:** Split-conformal calibration on nominal rollouts for a target false-alarm rate. Evaluate detector offline: AUROC (gate) + detection latency (result).
 - **Wk 9:** Optional second signal (chunk magnitude, ActProbe-style) only if separation is weak. Otherwise bank the time.
 - **Wk 10:** **Phase-1 gate.** Freeze detector config.

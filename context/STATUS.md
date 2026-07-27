@@ -16,6 +16,13 @@ _Last updated: 2026-07-27_
 
 **Phase 0 — Setup & Baseline. Week 2 of 28.**
 
+> **Week 1 starts 2026-07-17 (a Friday); weeks run Fri–Thu.** The week number is
+> *computed from this anchor*, never asserted from memory:
+> `week = floor((today - 2026-07-17) / 7) + 1`. Cross-checks against `PLAN.md` §2:
+> Week 4 = Aug 7–13 (the Phase-0 gate), Week 25 = Jan 1–7, Week 28 = Jan 22–28
+> (experiment freeze). Recompute every session — a stale week number is the
+> cheapest possible way to lose track of the January wall.
+
 Planning is well ahead of execution. Plan v2, the literature review, the cost
 model, and the logging schema are all locked. **No code has been written and no
 rollout has run.** Repo created 2026-07-27.

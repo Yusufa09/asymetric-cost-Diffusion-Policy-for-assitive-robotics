@@ -1,8 +1,19 @@
 # Third-party repos — pinned clones, hashes recorded in context/SETUP.md
 external/
 
-# Raw experiment output — source of truth, but far too large for git
-logs/
+# Raw experiment output — source of truth, but far too large for git.
+# Exception: logs/archive/ holds gzipped per-episode tables and IS committed —
+# it is the durable copy of the one-shot rows. See context/SETUP.md
+# § Backing up raw results. (Parent dirs must be re-included explicitly or git
+# never descends into them to see the negation.)
+logs/*
+!logs/README.md
+!logs/archive/
+logs/archive/*
+!logs/archive/*.jsonl.gz
+!logs/archive/*.csv.gz
+!logs/archive/MANIFEST.md
+
 data/
 outputs/
 wandb/
