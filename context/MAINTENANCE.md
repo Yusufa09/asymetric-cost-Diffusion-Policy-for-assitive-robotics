@@ -25,8 +25,8 @@ Claude *may*: edit files, `git add`/stage, and run read-only git commands
 
 | File | Where | How often | How |
 |---|---|---|---|
-| `STATUS.md` | `context/` | **Every session** | Rewrite in place. Snapshot, not journal — delete what's no longer true. Keep to one page. |
-| `LOG.md` | `context/` | **Every session** | Append a dated entry at the top. 3–5 lines. |
+| `STATUS.md` | `context/` | **Every session** | Rewrite in place. Holds **every** live loose end — no length limit. Delete each item the instant it closes. |
+| `LOG.md` | `context/` | **Every session** | Append a dated entry at the top. 10–25 lines for a real work session; see the template in the file. |
 | `DECISIONS.md` | `context/` | When a decision is made (~2×/month) | Append at the top. What / Why / Consequences. |
 | `SETUP.md` | `context/` | When the environment changes | Edit in place. Replace planned steps with what actually worked. |
 | `RESULTS.md` | `context/` | When a number lands (Phase 1+) | Create on first result, then append. **Does not exist yet.** |
@@ -72,7 +72,11 @@ reproduces from a clean checkout.
    prose claiming progress while checkboxes stayed unchecked — once on AWS
    credits, once on LIBERO task IDs.
 3. **Never invent a number, a result, or a task ID.** Unknown is `TBD`.
-4. **STATUS shrinks, LOG grows.** If STATUS is getting longer each session,
-   something that belongs in LOG or DECISIONS is leaking into it.
+4. **STATUS is bounded by closure, not length.** It should hold every open loose
+   end — an incomplete tracker is worse than a long one. What keeps it from
+   sprawling is deleting items the moment they resolve, and ordering sections by
+   how often they change so a routine session only rewrites the top. If it's
+   growing because *history* is accumulating in it, that history belongs in LOG or
+   DECISIONS.
 5. **This repo is the single source of truth.** Not Drive, not project-knowledge
    uploads, not a chat transcript. If it isn't written here, it doesn't exist.

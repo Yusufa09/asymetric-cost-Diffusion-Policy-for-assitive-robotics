@@ -1,26 +1,63 @@
 # LOG
 
-Dated session journal. Append-only, **newest first**. 3–5 lines per session:
-what you did, what broke, what's next.
+Dated session journal. Append-only, **newest first**: what you did, what you
+observed, what broke, what's next.
 
 This is the file `STATUS.md` can't be — STATUS is a snapshot that gets
-overwritten, this is the history. Two payoffs: in January you write the abstract
-from this instead of reconstructing it, and it doubles as the **project data
-book** that ISEF-affiliated fairs expect. Commit timestamps give tamper-evident
-dating.
+overwritten; this is the history. Two payoffs: in January you write the abstract
+from this instead of reconstructing it, and it is the **project data book**.
+Commit timestamps give tamper-evident dating.
 
 > **Open:** confirm whether a git-committed markdown log satisfies the
 > ScienceMontgomery / ISEF data book requirement, or whether a physical
-> handwritten logbook is required. Tracked in `STATUS.md`.
+> handwritten logbook is required. Tracked in `STATUS.md`. Verify early — the
+> value of a data book is that it was contemporaneous, so it can't be honestly
+> reconstructed later.
+
+## How much detail
+
+**This file is not auto-loaded into sessions, so length here is free.** Write for
+a judge and for January-you, not for brevity. A substantive work session is a
+paragraph or two plus specifics — roughly 10–25 lines. A 20-minute admin session
+is three. Length tracks what happened, not a quota.
+
+Five properties make it a real research log:
+
+1. **Contemporaneous.** Written the day it happened. Not reconstructed.
+2. **Failed attempts included.** The three hours lost to a build error *is* the
+   record. A log containing only successes reads as fabricated.
+3. **Specific enough to reconstruct.** Actual commands, versions, config values,
+   error text. "Got PushT working" is worthless in January; the exact incantation
+   that resolved it is what you need.
+4. **Raw observation before interpretation.** The number you saw, with seed and
+   n, then what you think it means.
+5. **Reasoning captured at the moment of choosing**, not rationalized afterward.
+
+Numbers live in `logs/*.jsonl` per `SPEC.md` — this file records what you ran,
+what you saw, and what you concluded, with pointers to run IDs.
 
 Template:
 
 ```
-## YYYY-MM-DD — <session focus>
-**Did:**
-**Broke / learned:**
-**Next:**
+## YYYY-MM-DD — <session focus>  (N hrs)
+
+**Goal:** what I set out to do.
+
+**Did:** commands, versions, configs, hashes. Specific.
+
+**Observed:** raw numbers with seed and n; the published figure being compared
+against; wallclock. Interpretation after the number, not instead of it.
+
+**Broke / dead ends:** what failed, how long it cost, how it was diagnosed,
+what actually fixed it. Do not skip this section.
+
+**Decided:** anything that constrains future work → also append to DECISIONS.md.
+
+**Next:** the handoff to the next session.
 ```
+
+Log hours per session — it feeds the ISEF forms and tracks against the
+10–12 hrs/week capacity assumption in `PLAN.md`.
 
 ---
 
