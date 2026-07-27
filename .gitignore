@@ -1,0 +1,27 @@
+# Third-party repos — pinned clones, hashes recorded in context/SETUP.md
+external/
+
+# Raw experiment output — source of truth, but far too large for git
+logs/
+data/
+outputs/
+wandb/
+
+# Checkpoints
+*.ckpt
+*.pt
+*.pth
+checkpoints/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+.venv/
+
+# Secrets
+.env
+
+# macOS
+.DS_Store
