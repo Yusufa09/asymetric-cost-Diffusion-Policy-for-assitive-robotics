@@ -19,14 +19,19 @@ things you already watched me do. Ask only about what you genuinely can't infer.
    attempted — ask me. One batched question, not a series.
 
 3. **Append to `context/LOG.md`** (newest first, directly under the header, above
-   any previous entry). Use the template. 3–5 lines. Record what broke and the
-   workaround, not just what succeeded — that's the part future-you needs.
+   any previous entry). Use the template in that file — it is the project data
+   book, so write it properly: goal, what was done with specifics (commands,
+   versions, hashes), raw observations with seed and n, **what broke and how long
+   it cost**, decisions, and the handoff. 10–25 lines for a real work session.
+   Length here is free — the file isn't auto-loaded. Ask me for the hours if you
+   can't infer them.
 
 4. **Rewrite `context/STATUS.md`.** Update the date, current position, **the
-   single next concrete action**, the last-3-decisions list, open questions, and
-   the checklists. It is a snapshot, not a journal: delete what's no longer true
-   rather than accumulating. **Keep it to one page** — it loads into every
-   session, so length here taxes every future conversation.
+   single next concrete action**, and every section that changed. STATUS holds
+   **every** open loose end — if this session surfaced a new one, add it; there is
+   no length limit. What keeps it bounded is deletion: remove each item the moment
+   it closes, since `LOG.md` and `DECISIONS.md` carry the history. Keep the
+   sections ordered by how often they change.
 
 5. **If a decision was made, append to `context/DECISIONS.md`** (newest first)
    with **What / Why / Consequences**. The *why* is the whole point — it's

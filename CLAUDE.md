@@ -78,8 +78,8 @@ disturbances — and evaluate under asymmetric cost, which none of them do."*
 
 | File | What it is | Update trigger |
 |---|---|---|
-| `context/STATUS.md` | Where I am right now. One page, always. | Every session |
-| `context/LOG.md` | Dated session journal. Also the ISEF data book. | Every session (append) |
+| `context/STATUS.md` | Where I am right now + **every open loose end**. Bounded by closure, not length. | Every session |
+| `context/LOG.md` | Dated session journal / project data book. Detailed — not auto-loaded. | Every session (append) |
 | `context/DECISIONS.md` | Decision archive with the WHY. | When a decision is made |
 | `context/PLAN.md` | Plan v2 — phases, week-by-week, grid, gates. | Phase gates (5×) |
 | `context/SPEC.md` | Cost model + logging schema. The locked contract. | Phase 3 only |
