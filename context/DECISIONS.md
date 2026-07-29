@@ -10,6 +10,63 @@ if it changes downstream work.
 
 ---
 
+## 2026-07-29 — Diffusion Policy is vendored into this repo, not pinned by hash
+
+**What.** `external/diffusion_policy/` is committed to this repo in full — 369
+files, 31 MB, upstream commit `5ba07ac6661db573af695b419a7947ecb704690f`, MIT
+licensed, **unmodified**. This reverses SETUP.md's original "pinned clones,
+gitignored" policy. Submodules remain rejected. `.gitignore` now ignores
+`external/*` and un-ignores vendored repos **one line at a time**.
+
+**Why.** A recorded commit hash is only a *reference*, and a reference dies if
+upstream is deleted or force-pushed. Experiments run to January 2027 and the fair
+is March 2027, so the code has to survive independently of anyone else's
+repository. The alternative considered and rejected was forking DP to a personal
+GitHub account — equivalent insurance with a cleaner repo, but it leaves
+reproduction dependent on two repos staying in sync.
+
+**Consequences.**
+
+- The repo is now **369 vendored files against 22 of my own**. The boundary must
+  therefore be stated explicitly whenever the repo is shown: everything under
+  `external/` is verifiably upstream at a known commit, everything I wrote is in
+  `src/`. Expect "which part did you write?" from a judge and answer it in one
+  sentence.
+- **Never edit the vendored tree.** Wrap or subclass from `src/` instead — which
+  is what `eval_pusht.py` already does. An edit inside `external/` is invisible in
+  review, unattributable, and voids the unmodified-upstream guarantee.
+- The nested `.git` had to be deleted before staging. Leaving it would have made
+  git record a **gitlink (mode 160000)** — an accidental submodule that renders as
+  an unclickable folder on GitHub and clones as an *empty* directory. Verified
+  absent. **Any future vendoring must repeat this check.**
+- The per-repo opt-in in `.gitignore` is load-bearing, not stylistic: **LIBERO
+  ships ~100 GB of demonstration data**, and a blanket un-ignore of `external/`
+  would attempt to commit it. If LIBERO is vendored later, vendor the code only.
+
+## 2026-07-29 — `success_flag` on PushT is `max_reward >= 1.0`, and the continuous score is logged alongside it
+
+**What.** PushT's env reward is `clip(coverage / 0.95, 0, 1)`; success is defined
+as coverage ≥ 95%, i.e. `max_reward >= 1.0`. `max_reward` is additionally logged
+as its own float field in Table A.
+
+**Why.** `SPEC.md` requires `success_flag` but PushT hands you a continuous
+coverage score, so a threshold had to be chosen and written down before it could
+be chosen conveniently later. Logging the float as well is the raw-not-aggregated
+principle: freeze the boolean at rollout time and every alternative threshold
+becomes unrecoverable without re-running the grid.
+
+**Consequences.** The first 50-episode run shows why this matters. Mean score
+0.9453 and success rate 30/50 = 60% describe the *same* episodes, and the
+distribution is bimodal — 30 at exactly 1.0, **17 in [0.9, 1.0)**, nothing in
+[0.5, 0.9). With a third of episodes within ten points of a cutoff **inherited
+from IBC rather than chosen**, a disturbance that shifts coverage slightly could
+swing the success rate ~20 points while barely moving mean score. Since
+`success_flag` is the binary feeding the asymmetric cost model, a
+**success-threshold sensitivity sweep is now owed in Phase 3**, run alongside the
+cost-ratio sweep. "Why 0.95?" cannot be answered with "it came with the
+environment." Compounding it: 20/50 episodes hit the 300-step truncation, so
+episode length is censored and the binary carries more weight than it appears to.
+
 > **2026-07-28 — no entry.** A compute-stack decision was drafted this session
 > and removed before commit: SageMaker was written up as "locked" for Phases 0–1
 > when nothing had actually been chosen. What the session produced was a *fact*
