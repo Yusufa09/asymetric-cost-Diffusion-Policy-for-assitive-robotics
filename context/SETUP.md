@@ -138,10 +138,20 @@ commit of the code, row count, and what the run was. It is also committed.
 **Tier 2 — trajectory blobs (large, cloud).** `intermediate_state_ref` targets,
 video, and checkpoints are far too large for git.
 
-- Destination: `TBD` — **deliberately unset**, because it likely wants to be the
-  same provider as the compute stack, which is still open (see `STATUS.md`,
-  resolving 2026-07-28). Fill this in as part of that decision.
+- Destination: `TBD` — still deliberately unset, but the *reasoning inverted on
+  2026-07-28*. It should **not** be colocated with compute. The AWS accounts
+  auto-close at 6 months and take their S3 buckets with them, so a colocated
+  bucket is a backup that deletes itself in January. Leading candidate is Google
+  Drive (provider-independent, survives spot reclaims / quota denials / account
+  closure; 15 GB free, ~$2/mo for 100 GB). **Must close before the first real run
+  writes rows.**
 - Sync command: `TBD`
+- **Size decision that belongs here, not Phase 4:** make `intermediate_state_ref`
+  point to a **MuJoCo sim-state snapshot, not rendered frames.** At ~KB/step
+  that's ~1 GB for a thousand episodes and fits in free Drive; at frame
+  resolution it is ~100× that, and Tier-2 backup becomes both a real cost and a
+  real sync problem. Cheap to fix now, and getting it wrong is exactly how the
+  Phase-4 recoverability stretch dies silently.
 
 **The rule: back up before the next run starts, not at end of session.** A
 session that crashes mid-grid is exactly when you lose the rows you care about
@@ -155,16 +165,126 @@ belief, not a backup.
 
 ## Cloud
 
-**Undecided.** No provider has been chosen — AWS, RunPod, Kaggle, Vast, and Colab
-are all still open. Being decided 2026-07-28; tracked in `STATUS.md`. Fill this
-section in once the decision is made and log the reasoning in `DECISIONS.md`.
+**STILL UNDECIDED as of 2026-07-28.** No provider has been chosen. What changed
+this session is *availability*, not the decision: one option is now confirmed to
+work. **The decision waits on the EC2 quota outcome** and is tracked in
+`STATUS.md`.
 
-**Nothing in Phase 0 is blocked by it.** PushT is CPU-local, the DP install is
-local, and the cost model was paper work. LIBERO (Week 2) is the first thing that
-actually needs a GPU. If you catch yourself sinking hours into cloud setup before
-DP evaluates locally, that's a signal you've drifted off the critical path.
+| Layer | Where | Status |
+|---|---|---|
+| Local (CPU) | MacBook Air | The only settled row. PushT low-dim, DP install, logging schema, **all of Phase 3** (pure post-processing, no GPU) |
+| Interactive GPU (Ph 0–1, Wk 12) | `TBD` | **Undecided.** SageMaker `ml.g5.2xlarge` is *confirmed obtainable in minutes* (A10G 24GB, 8 vCPU, 32 GB RAM; quota 0 → 1 instantly, self-service) — obtainable is not chosen |
+| Bulk grid (Wk 13–15) | `TBD` | **Undecided.** Candidates: SageMaker managed-spot processing jobs, EC2 Spot, other accounts' credits, RunPod |
+| Tier-2 blob storage | `TBD` | Deliberately open — see § Backing up raw results. Must close before the first real run |
 
-### Prior analysis — inputs, **not** a decision
+Unresolved input that will shape the choice, recorded so it isn't re-derived:
+AWS on-demand runs ~2.5× RunPod for less GPU (~$0.80–1.00/hr vs ~$0.34/hr for an
+RTX 4090), so the credits are the only thing that makes AWS competitive at all.
+Worth weighing when the quota outcome lands — **not itself a decision.**
+
+**Nothing in Phase 0 is blocked by any of this.** PushT is CPU-local, the DP
+install is local, and the cost model was paper work. LIBERO (Week 2) is the first
+thing that actually needs a GPU. If you catch yourself sinking hours into cloud
+setup before DP evaluates locally, that's a signal you've drifted off the
+critical path.
+
+### AWS account facts
+
+- Post-2025-07-15 Free Tier: **$100 at signup + $100 for five onboarding tasks**,
+  **6-month expiry, and the account auto-closes** at expiry or credit depletion,
+  whichever comes first. Remaining credits are forfeited at close.
+- Accounts belong to different people; each carries its own $200. Up to 3
+  available. **Currently open: 1** (as of 2026-07-28); the other two can be opened
+  whenever needed. Maximum realistic pool: **$600**.
+- Balance on the open account: **$200, untouched.**
+- Timing is not a constraint: all GPU work finishes by **mid-November** (Phase 3
+  and Phase 5 need no GPU at all), so a 6-month clock started in July has ~2.5
+  months of slack. The only rule is that **nothing irreplaceable stays in these
+  accounts past January.**
+
+### Quotas — the thing that actually gates GPU access
+
+SageMaker and EC2 quotas are **separate namespaces**. SageMaker quotas are also
+split **per usage type** — notebook instance, Studio/JupyterLab, training job,
+processing job, spot training job, endpoint — and each is defaulted
+independently. Approval on one says nothing about the others.
+
+**SageMaker `ml.g5.2xlarge` — defaults to 0, but raises to 1 instantly.** The
+increase to **1 instance** is self-service and granted immediately on any account,
+with no support case and no wait (verified 2026-07-28). So the real distinction
+against EC2 is not *quota vs. no quota* — both start at 0 — it is **minutes vs.
+days-with-a-maybe.**
+
+> **Hard ceiling: 1 concurrent instance per account.** Three accounts ⇒ three
+> concurrent GPUs, ~400 GPU-hr total. No ability to burst. Credits still bind
+> before wall-clock (~400 GPU-hr across 3 instances ≈ 5.5 days continuous, inside
+> a 5-week Phase-2 window), so this is survivable — but it must be planned for,
+> and no earlier analysis in this repo modeled it.
+
+Two things about this cap are **unknown and worth checking before Phase 2**:
+whether it can be raised above 1 at all, and whether the instant grant covers
+*training job* / *processing job* / *spot training job* usage types or only
+notebook/Studio usage. Those are the surfaces a batch grid would actually run on,
+and each usage type is defaulted independently. Query them:
+
+```bash
+aws service-quotas list-service-quotas --service-code sagemaker --region us-east-1 --query "Quotas[?contains(QuotaName,'g5.2xlarge')].[QuotaName,Value]" --output table
+```
+
+- EC2 G-family: **both quotas default to 0 vCPU** on new accounts and are
+  separately adjustable. Units are vCPUs, not instances.
+
+| Quota | Code | Requested | Status |
+|---|---|---|---|
+| `Running On-Demand G and VT instances` | `L-DB2E81BA` | 8 vCPU | **PENDING** (filed 2026-07-28, `us-east-1`) |
+| `All G and VT Spot Instance Requests` | `L-3819A6DF` | 16 vCPU | **PENDING** (filed 2026-07-28, `us-east-1`) |
+
+```bash
+aws service-quotas list-requested-service-quota-change-history --service-code ec2 --region us-east-1 --output table
+```
+
+Auto-denial within minutes is common and expected. Escalation path: Support →
+Create case → **Service limit increase** or **Account and billing** (both free on
+Basic; *not* Technical, which needs a paid plan). The strongest justification line
+is that the account already runs SageMaker GPU workloads, so EC2 access is being
+requested for cost efficiency on batch evaluation — verifiable in-account
+evidence that this is a real workload.
+
+**Region discipline: `us-east-1`, always.** Quotas, AMIs, S3 buckets, and egress
+all care, and requesting a quota in the wrong region is the most common wasted
+cycle.
+
+### Two SageMaker gotchas — *if* SageMaker is chosen
+
+1. **Conda envs do not survive a Notebook Instance restart.** Only
+   `/home/ec2-user/SageMaker` is on the persistent EBS volume; everything else is
+   rebuilt from the AMI on every start. Install the LIBERO/robosuite env *into*
+   that path or it evaporates the first time you stop the instance. SageMaker
+   **Studio** persists the whole home directory on EFS and sidesteps this — prefer
+   Studio if the quota allows.
+2. **Notebook instances do not auto-stop.** Attach AWS's `auto-stop-idle`
+   lifecycle configuration at creation time. At ~$1.5/hr a forgotten instance
+   drains $200 in under six days, and the card on file is not yours. Set a Budgets
+   alert on credit **balance**, not just spend.
+
+- Provider(s) chosen: **`TBD` — none.** Decision pending the EC2 quota outcome
+- Account setup / smoke test notes: `TBD`
+- Budget alarms configured: `TBD` — **do this before launching anything**
+
+### Prior analysis — one premise falsified, the rest still stands
+
+> **Amended 2026-07-28, not overturned.** The SageMaker objections below assumed
+> EC2 access was *obtainable*. It is quota-gated and still unconfirmed — that was
+> the load-bearing error, and it is why SageMaker is back in contention rather
+> than eliminated. Two of the four objections also turn out to be narrower than
+> written: "job-submission model" and "custom-container requirement" apply to
+> training/processing jobs, **not** to notebook/Studio instances, and the
+> job-submission model may actually suit the Phase-2 grid, which is embarrassingly
+> parallel and fire-and-forget (PLAN §3 Wk 14 asks for exactly "managed spot +
+> checkpointing", which SageMaker Managed Spot provides and EC2 Spot would require
+> writing by hand). The managed markup objection stands and is real. **None of
+> this decides anything** — it re-opens SageMaker as a candidate. The closing two
+> bullets below remain the sharpest guidance in this section.
 
 Worked through on 2026-07-20 and recovered from the Phase-0 chat on 2026-07-27.
 Recorded here so tomorrow's decision starts from this rather than re-deriving it.
@@ -201,6 +321,8 @@ Two things worth carrying into the decision regardless of who wins:
   instance drains free credits exactly like it drains dollars, and a drained
   credit is a silent failure you won't notice until you need the compute.
 
-- Provider(s) chosen: `TBD`
-- Account setup / smoke test notes: `TBD`
-- Budget alarms configured: `TBD`
+**The hinge above got its answer on 2026-07-28: $200 per account, 6-month expiry
+with auto-close, up to 3 accounts.** That is neither of the two cases this
+analysis anticipated — not four figures, not ~$100 — so the flip it describes
+doesn't fire cleanly either way. It landed in the middle, which is why the
+decision now turns on quota access rather than on pool size.

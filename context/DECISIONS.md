@@ -10,6 +10,16 @@ if it changes downstream work.
 
 ---
 
+> **2026-07-28 — no entry.** A compute-stack decision was drafted this session
+> and removed before commit: SageMaker was written up as "locked" for Phases 0–1
+> when nothing had actually been chosen. What the session produced was a *fact*
+> (SageMaker `ml.g5.2xlarge` quota raises from 0 to 1 instantly and self-service,
+> where EC2's G-family quotas need a support case and days) — not a choice. Facts go in
+> `SETUP.md` and `LOG.md`. **This is the second time in ten days the compute stack
+> has been falsely written up as decided** (see the 2026-07-27 LOG entry). The
+> stack remains open until the EC2 quota outcome is known; it is tracked as an
+> open question in `STATUS.md`.
+
 ## 2026-07-27 — Repo is the single source of truth; Drive copies retired
 
 **What.** All project context lives in `context/` in this repo. The Google Drive

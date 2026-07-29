@@ -8,11 +8,10 @@ overwritten; this is the history. Two payoffs: in January you write the abstract
 from this instead of reconstructing it, and it is the **project data book**.
 Commit timestamps give tamper-evident dating.
 
-> **Open:** confirm whether a git-committed markdown log satisfies the
-> ScienceMontgomery / ISEF data book requirement, or whether a physical
-> handwritten logbook is required. Tracked in `STATUS.md`. Verify early — the
-> value of a data book is that it was contemporaneous, so it can't be honestly
-> reconstructed later.
+> **Resolved 2026-07-28:** the data book format is flexible, so this
+> git-committed markdown log satisfies the requirement. No physical handwritten
+> logbook is needed. Keep writing it contemporaneously anyway — that property is
+> what makes it worth anything to a judge.
 
 ## How much detail
 
@@ -58,6 +57,84 @@ what actually fixed it. Do not skip this section.
 
 Log hours per session — it feeds the ISEF forms and tracks against the
 10–12 hrs/week capacity assumption in `PLAN.md`.
+
+---
+
+## 2026-07-28 — Compute stack investigation; AWS GPU access path found  (~2 hrs)
+
+**Goal:** Resolve the compute-stack decision STATUS scheduled for today.
+
+**Did:** Priced every candidate against PLAN §10's 350–650 GPU-hr estimate.
+**One** AWS account open on the post-2025-07-15 Free Tier ($100 at signup + $100
+for five onboarding tasks, **6-month expiry with automatic account closure**),
+balance **$200, untouched**; two more can be opened on demand. Then established
+the session's key fact by comparing two quota paths. SageMaker `ml.g5.2xlarge`
+also **defaults to 0**, but the increase to **1 instance is self-service and
+granted immediately, on any account** — no support case, no wait. EC2's G-family
+quotas (`Running On-Demand G and VT instances` and `All G and VT Spot Instance
+Requests`, independently adjustable, separate namespace from SageMaker's) also
+default to **0 vCPU** but require a support case and 1–5 business days, with
+denial common for accounts without billing history. So the difference between the
+two surfaces is **not** quota vs. no quota — it is *minutes* vs. *days-with-a-
+maybe*. Filed both EC2 requests in `us-east-1`:
+`Running On-Demand G and VT instances` → 8 vCPU (`L-DB2E81BA`) and
+`All G and VT Spot Instance Requests` → 16 vCPU (`L-3819A6DF`). Both **PENDING**
+at end of session.
+
+**Observed:** No rollout numbers — nothing was run. Pricing collected, all
+approximate and none yet checked against a real invoice: EC2 `g6.xlarge`
+on-demand $0.8048/hr, `g5.xlarge` $1.006/hr, EC2 Spot ~$0.30–0.40/hr, RunPod RTX
+4090 $0.34/hr, Vast RTX 4090 ~$0.29–0.39/hr, SageMaker `ml.g5.2xlarge` ~$1.5/hr
+(**estimated** from `g5.2xlarge` plus typical managed markup — not sourced, and
+load-bearing, so verify it off Cost Explorer once real hours exist). The spread
+that matters: $200 buys **~130 GPU-hr** on SageMaker on-demand versus **~570** on
+EC2 Spot. That ~4× gap is the entire reason the EC2 request is worth filing.
+
+**Second constraint, previously unmodeled: SageMaker's instant quota grant caps
+at 1 instance.** So SageMaker gives at most **one concurrent GPU per account** —
+three accounts, three concurrent instances, ~400 GPU-hr total. Credits bind before
+wall-clock does (~400 GPU-hr over 3 instances ≈ 5.5 days of continuous 3-way
+parallel running, inside a 5-week Phase-2 window), so the ceiling is survivable,
+but it means the Phase-2 grid has **no ability to burst**. Whether the cap can be
+raised above 1, and whether the instant grant applies to *training job* /
+*processing job* / *spot training job* usage types as well as notebook usage, is
+unknown and matters — those are the surfaces a batch grid would actually use.
+
+**Broke / dead ends:** Three recommendations were made and reversed *within* the
+session. Recording them because each reversal was forced by a fact, and the
+sequence is the actual finding. (1) "Single-provider AWS on EC2 Spot" — killed on
+learning EC2 G quotas default to 0 and are routinely denied for individual
+accounts with no billing history. (2) "RunPod primary, ~$150–250 out of pocket" —
+killed on learning SageMaker already works today. (3) The multi-account plan was
+flagged against AWS Free Tier Terms (creating "more than one account to receive
+additional benefits" ⇒ ineligible, standard rates charged); resolved as
+non-applicable because the accounts belong to different people. Net cost: no
+wasted spend, but the lesson is sharp — **AWS GPU access is gated by quota, not
+by credits**, and SETUP.md's prior analysis had silently assumed EC2 access was
+obtainable. That assumption was the load-bearing error.
+
+**Decided:** *Nothing.* The compute stack is still open and now waits on the EC2
+quota outcome. Recording that explicitly, because a DECISIONS.md entry locking
+SageMaker as the Phase 0–1 surface was drafted this session and **removed before
+commit** — what the session produced was a fact (SageMaker works without a support
+case), and availability is not a choice. This is the **second time in ten days**
+the compute stack has been written up as decided when it wasn't; the 2026-07-27
+entry below records the first. The pattern is worth naming: the moment an option
+is confirmed to work, the writeup wants to promote it to "chosen," and it takes a
+deliberate pass to catch. Sole guard is `MAINTENANCE.md` rule 2 — never mark
+something done that wasn't verified.
+
+**Closed:** Data book format — flexible, so this markdown log qualifies. GitHub
+repo confirmed private.
+
+**Opened:** Competition venue is undecided — ScienceMontgomery vs. PG County,
+the latter possibly an easier ISEF path. Changes nothing about the project or the
+schedule, but the two have different registration and abstract deadlines, so it
+cannot stay unexamined. ScienceMontgomery 2027 registration is **not yet open**.
+
+**Next:** Install Diffusion Policy and evaluate a released low-dim PushT
+checkpoint on CPU, per `SETUP.md`. Unchanged, unblocked by any of the above, and
+now two sessions overdue.
 
 ---
 
