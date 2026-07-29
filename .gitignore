@@ -1,5 +1,13 @@
-# Third-party repos — pinned clones, hashes recorded in context/SETUP.md
-external/
+# Third-party repos. Ignored BY DEFAULT, vendored only by explicit opt-in below.
+# This ordering is deliberate: LIBERO ships ~100 GB of demonstration data, and a
+# blanket un-ignore of external/ would try to commit it. Add a negation per repo,
+# never a blanket one. Hashes recorded in context/SETUP.md.
+external/*
+!external/README.md
+# Diffusion Policy is VENDORED (decision 2026-07-29): committed in full at
+# upstream commit 5ba07ac6661db573af695b419a7947ecb704690f. MIT licensed;
+# LICENSE file is included in the vendored tree as that license requires.
+!external/diffusion_policy/
 
 # Raw experiment output — source of truth, but far too large for git.
 # Exception: logs/archive/ holds gzipped per-episode tables and IS committed —

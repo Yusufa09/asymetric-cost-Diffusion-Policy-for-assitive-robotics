@@ -3,10 +3,10 @@
 How to reproduce the environment from scratch. **Update whenever the environment
 changes** — pinned commits, new dependencies, checkpoint locations, cloud config.
 
-> **Status: nothing here has been executed yet.** Everything below is the planned
-> procedure as of 2026-07-27. Replace the plan with what actually worked, including
-> the workarounds — a session in November needs the real commands, not the intended
-> ones.
+> **Status: Steps 1–3 executed and working as of 2026-07-29** on the MacBook Air
+> (arm64, 8 cores, 16 GB). Steps 4+ are still the planned procedure. Where a step
+> has been run, the recorded commands are the ones that *actually* worked,
+> including workarounds.
 
 ---
 
@@ -20,14 +20,35 @@ src/
   disturbances/  empty until Phase 1
   cost/        empty until Phase 3
 configs/
-external/    gitignored — cloned DP and LIBERO repos
+external/    diffusion_policy/ is VENDORED (committed); everything else gitignored
 logs/        gitignored — raw JSONL/CSV rows land here
 ```
 
-**Vendoring policy: pinned clones, not submodules.** Clone third-party repos into
-`external/` (gitignored) and record the exact commit hash below. Submodules are a
-known source of confusion — detached HEAD, forgotten `--recursive`, sync headaches
-— and a documented hash gives the same reproducibility for a solo project.
+**Vendoring policy: full copies, not submodules, opt-in per repo.**
+*(Revised 2026-07-29 — this section previously said "pinned clones, gitignored.")*
+
+Submodules stay rejected for the original reasons: detached HEAD, forgotten
+`--recursive`, sync headaches. But a **recorded hash is only a reference**, and a
+reference dies if upstream is deleted or force-pushed. Experiments run to January
+2027 and the fair is March 2027, so the code must survive independently of anyone
+else's repository.
+
+So: **Diffusion Policy is committed to this repo in full** — 369 files, 31 MB, at
+upstream commit `5ba07ac6661db573af695b419a7947ecb704690f`, MIT licensed with the
+LICENSE file retained. Its nested `.git` was removed before staging; leaving it in
+place would have made git record a **gitlink (mode 160000)** — an accidental
+submodule, the exact thing this policy rejects. **If you vendor another repo,
+delete its `.git` first and confirm `git ls-files` shows real paths, not a single
+160000 entry.**
+
+`.gitignore` ignores `external/*` and un-ignores vendored repos **one line at a
+time**. Do not replace that with a blanket un-ignore: LIBERO ships ~100 GB of
+demonstration data and a blanket rule would try to commit it. If LIBERO is
+vendored later, vendor the *code* only.
+
+**Never edit the vendored tree.** Wrap or subclass from `src/` instead. An edit
+inside `external/` is invisible in review, unattributable, and voids the guarantee
+that this is upstream code at a known commit. See `external/README.md`.
 
 ## Environment strategy
 
@@ -44,19 +65,59 @@ specifically. **That is the known tax, not you doing something wrong.**
 ## Step 1 — Diffusion Policy
 
 ```bash
-git clone https://github.com/real-stanford/diffusion_policy.git external/diffusion_policy
-git -C external/diffusion_policy rev-parse HEAD   # record the hash below
-mamba env create -f external/diffusion_policy/conda_environment.yaml
+git clone --depth 1 https://github.com/real-stanford/diffusion_policy.git external/diffusion_policy
+mamba env create -f external/diffusion_policy/conda_environment_macos.yaml
+# then the two fixes below — the env is NOT usable without them
+mamba remove -n robodiff accelerate -y
+mamba install -n robodiff -c conda-forge "huggingface_hub=0.25.2" -y
 ```
 
-The env is named `robodiff`. Follow the repo README as source of truth — the
-pinned deps are what they are; don't fight them.
+**Use `conda_environment_macos.yaml`, not `conda_environment.yaml`.** The latter
+is the CUDA/linux env and cannot solve on osx-arm64. Both create an env named
+`robodiff`.
 
-**Done when:** `robodiff` activates and `python -c "import diffusion_policy"` runs
-without error.
+**Done when** this prints `ALL OK` — note that `import diffusion_policy` alone
+proves nothing, because DP ships no `__init__.py` and resolves as an implicit
+namespace package even when every dependency is broken:
 
-- Pinned commit: `TBD`
-- Actual install notes / workarounds: `TBD`
+```bash
+mamba run -n robodiff python -c "
+import sys; sys.path.insert(0, 'external/diffusion_policy')
+import torch, gym, pymunk, pygame, hydra, dill
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusion_policy.workspace.train_diffusion_unet_lowdim_workspace import TrainDiffusionUnetLowdimWorkspace
+from diffusion_policy.env_runner.pusht_keypoints_runner import PushTKeypointsRunner
+print('ALL OK', torch.__version__)"
+```
+
+- Pinned commit: `5ba07ac6661db573af695b419a7947ecb704690f`
+- Installed size: env 1.6 GB (under miniforge, *not* in this repo) + 31 MB clone
+- Actual install notes / workarounds (2026-07-29):
+  1. **The conda half solves cleanly on osx-arm64** — 310 packages, 316 MB. The
+     Apple-Silicon friction this file warned about did not materialize there.
+     torch 1.12.1 (CPU), gym 0.21.0, pymunk, av all resolve.
+  2. **The pip half fails**, and `mamba env create` exits 1 — but the conda env
+     is already fully built at that point, so this is "run two more commands,"
+     not "start over." `imagecodecs==2022.9.26` fails to compile (missing
+     `libheif/heif.h`). **Ignore it**: it is imported only by `real_world/` and
+     the robomimic *image* dataset, neither of which this project touches. Same
+     for `robomimic`, `r3m`, `pytorchvideo`, `atomics`, `ray` — none are
+     imported anywhere on the PushT low-dim path. `pygame` is the only pip
+     package that matters and it installs before the failure.
+  3. **`accelerate` must be removed.** The osx-arm64 CPU torch build ships
+     without `torch.distributed`, so `accelerate` 0.13.2 dies on
+     `from torch.distributed import ReduceOp` — and `diffusers` imports
+     accelerate on the scheduler path. `diffusers` guards it behind
+     `is_accelerate_available()`, which only checks that the package *exists*;
+     deleting it makes the check return False and diffusers works. DP itself
+     never imports accelerate.
+  4. **`huggingface_hub` must be pinned to 0.25.2.** It is unpinned in the yaml,
+     so conda installs 0.31.4, which removed `cached_download` — a symbol
+     `diffusers` 0.11.1 still imports. 0.25.2 is the newest release that keeps
+     it, so the downgrade stays minimal. This is the classic failure mode of an
+     old pinned stack with an unpinned transitive dependency, and it will
+     recur: **if this env breaks in November, suspect an unpinned dep drifting,
+     not your code.**
 
 **Escape hatch:** if `robodiff` fights you for more than an hour, Hugging Face's
 **LeRobot** is a maintained modern reimplementation with a pip-installable PushT
@@ -79,23 +140,161 @@ Grab a **low-dim (state-based)** PushT checkpoint from
 **not** image-based, because image-based effectively needs a GPU and low-dim runs
 fine on CPU.
 
-Point the repo's eval script at it with `--device cpu`.
+**Do not use `external/diffusion_policy/eval.py`.** It unpickles its config from
+inside the `.ckpt`, so hydra never runs and there is no override syntax — every
+knob is frozen in a 1 GB pickle, including `n_envs`, `n_test`, and
+`policy.n_action_steps` (the execution horizon this entire project adapts). Use
+`src/rollout/eval_pusht.py`, which loads the same payload and patches the config
+before instantiating anything. It also emits Table A rows, so Steps 2 and 3
+collapse into one command.
 
-**Done when:** a success-rate number prints. Near the published PushT number ⇒ the
-whole pipe is proven and Phase 0 becomes a billing question rather than a research
-risk. An error ⇒ you found the real blocker in an afternoon instead of Week 4.
+- Checkpoint used:
+  `data/checkpoints/pusht_lowdim_cnn/epoch=0550-test_mean_score=0.969.ckpt`
+  (1,044,185,793 bytes, from `.../low_dim/pusht/diffusion_policy_cnn/train_0/checkpoints/`)
+- Exact eval command that worked (2026-07-29):
 
-- Checkpoint used: `TBD`
-- Success rate observed vs. published: `TBD`
-- Exact eval command that worked: `TBD`
+```bash
+mamba run -n robodiff python src/rollout/eval_pusht.py \
+  --checkpoint "data/checkpoints/pusht_lowdim_cnn/epoch=0550-test_mean_score=0.969.ckpt" \
+  --n-test 2 --n-train 0 --n-envs 2
+```
+
+- Smoke test (2 episodes): **2/2 success, mean_score 1.0000, 106.5 s wall.**
+- **Full reproduction — PASSED (2026-07-29).** 50 test episodes, CPU:
+
+```bash
+mamba run -n robodiff python src/rollout/eval_pusht.py \
+  --checkpoint "data/checkpoints/pusht_lowdim_cnn/epoch=0550-test_mean_score=0.969.ckpt" \
+  --n-test 50 --n-train 6 --n-envs 56
+```
+
+  | | |
+  |---|---|
+  | observed `test/mean_score` | **0.9453** (n=50, sd 0.194, se 0.027) |
+  | published | 0.9690 |
+  | gap | +0.0237 = **0.87 standard errors** |
+  | 95% CI | **[0.8916, 0.9990]** — contains the published value |
+  | wall clock | 8790.9 s (2 h 26 m), 56 rows written |
+
+  The residual gap needs no explaining away: **DDPM sampling noise is unseeded**,
+  and the published run was CUDA while this is CPU, so the RNG streams differ
+  entirely. Same initial conditions, different sampling noise. If an exact-match
+  reproduction is ever needed, the policy's sampling RNG must be seeded — it
+  currently is not, which also means **repeat runs of this command will not be
+  bit-identical.** That is fine for a mean over 50 episodes and would not be fine
+  for debugging a single trajectory.
+
+  Max `total_replans` observed was **38**, exactly the structural ceiling:
+  `ceil(max_steps / n_action_steps) = ceil(300/8)`. Useful as a sanity check —
+  if a future run exceeds it, termination is broken.
+- **The bottleneck is entirely policy inference.** Env subprocesses sit at ~0% CPU
+  and cost ~12 MB each, so **`n_envs` is a throughput knob, not a memory risk** —
+  56 workers run fine on a 16 GB machine and raise driver utilisation from ~200%
+  to ~650% CPU.
+
+> **Do not read high CPU% as high throughput.** An earlier version of this file
+> concluded "prefer one big chunk" from the utilisation number alone. That was
+> wrong: the extra CPU was doing more *work*, not more *episodes*. Two effects
+> push in opposite directions and only one of them is measured:
+>
+> 1. **Straggler waste — MEASURED at 25.5%.** The loop calls the policy on the
+>    whole batch until the *last* episode finishes, so early finishers keep paying.
+>    From the logged rows: 1586 batch-elements were actually needed, 2128 were
+>    paid for (38 calls × 56 envs). Ideal speedup from eliminating this: **1.34×**.
+>    It grows with the spread of episode lengths — here 20/50 episodes ran the
+>    full 300 steps while the shortest took 79.
+> 2. **Per-sample batch efficiency — MEASURED at 1.25× worse.** Large batches are
+>    memory-bandwidth bound on this CPU. Timed per policy call:
+>
+>    | `n_envs` | s / call | s per episode-slot |
+>    |---|---|---|
+>    | 1 | 3.30 (stable over 35 calls) | **3.30** |
+>    | 56 | 231.3 (8790.9 s / 38 calls) | **4.13** |
+>
+> **Combined, small `n_envs` wins on CPU: 1.34 × 1.25 ≈ 1.68×.** Sequential
+> `n_envs=1` over the same 56 episodes projects to 1586 calls × 3.30 s ≈ **1 h 27 m**
+> against the **2 h 26 m** actually spent at `n_envs=56`. So for a CPU run, prefer
+> *small* chunks — the opposite of what this file said before.
+>
+> Caveats: the batch-1 figure comes from a single episode (per-call time was steady,
+> but episode-to-episode variation is unmeasured), and this is one machine. **On GPU
+> the tradeoff very likely reverses** — a GPU is starved at batch 1 and the straggler
+> waste would be cheap next to the parallelism gain. Measure before assuming, and do
+> not infer throughput from CPU%.
+
+**Wrap any local run longer than a few minutes in `caffeinate`.** macOS sleeping
+mid-run suspended a 25-minute evaluation on 2026-07-29. It survived (the process
+resumed on wake) but that is luck, not design, and nothing is written until the
+run ends — a sleep that turns into a shutdown loses the whole run:
+
+```bash
+caffeinate -is mamba run -n robodiff python src/rollout/eval_pusht.py ...
+```
+
+**Provenance trap, recorded because it would be very expensive to rediscover:**
+the `config.yaml` published alongside the checkpoints says
+`test_start_seed: 100000`, but the config *inside* the checkpoint says
+**`4300000`** (with `training.seed: 42`). They disagree. **The checkpoint is the
+authority** — `eval_pusht.py` reads from the payload, so it gets this right
+automatically, but anything that reconstructs a config from the published YAML
+will silently evaluate different initial conditions and then fail to reproduce
+the published score for reasons that look like a bug in your code.
 
 ## Step 3 — Emit one Table A row
 
-Wrap the eval so it writes a single per-episode JSONL row per `SPEC.md` Table A
-(`episode_id`, `task_id=pusht`, `seed`, `condition=eval`, `success_flag`,
-`wallclock`, `git_commit`). This dry-runs the logging code on throwaway data.
+**Done — folded into Step 2.** `src/rollout/eval_pusht.py` writes Table A rows to
+`logs/table_a.jsonl` via `src/logging/rows.py`, which validates every row against
+the schema at write time (a typo raises instead of silently dropping a column).
 
-**Done when:** `logs/` contains one valid JSONL row.
+Two schema decisions made here, both additive to `SPEC.md` Table A:
+
+- **`success_flag` needed a definition and now has one.** PushT's env reward is
+  `clip(coverage / 0.95, 0, 1)` and success is coverage ≥ 95%, i.e.
+  `max_reward >= 1.0`. **The published 0.969 is a mean *score*, not a success
+  rate** — do not compare it against a success percentage. `max_reward` is
+  logged as its own float field so any success threshold stays recomputable.
+
+> **⚠ Threshold sensitivity — carry this into Phase 1, and into `SPEC.md` at the
+> Phase-3 gate (do not edit `SPEC.md` before then; its update trigger is Phase 3).**
+>
+> The same 50 episodes give **mean_score 0.9453** and **success rate 30/50 = 60%**.
+> Both are correct. The distribution is bimodal with a third of episodes parked
+> just below the cutoff:
+>
+> | bucket | n |
+> |---|---|
+> | `= 1.0` (coverage ≥ 95%, success) | 30 |
+> | `0.9–1.0` (≈85–95% coverage, near-miss) | **17** |
+> | `0.5–0.9` | 0 |
+> | `< 0.5` (real failure, min 0.023) | 3 |
+>
+> **Why this is a risk, not a curiosity:** `success_flag` is the binary that feeds
+> the asymmetric cost model, and the 0.95 coverage cutoff was inherited from IBC,
+> not chosen. With 17/50 episodes within ten points of it, a disturbance that
+> shifts coverage slightly could swing the success *rate* by ~20 points while
+> barely moving mean_score — making downstream recovery-utility claims look far
+> more (or less) dramatic than the underlying effect. A judge can ask "why 0.95?"
+> and the answer cannot be "it came with the environment."
+>
+> Compounding it: **20/50 episodes hit the 300-step truncation**, so episode
+> length is censored and the binary is doing more work than it appears.
+>
+> Mitigation already in place: `max_reward` is logged per episode, so every
+> threshold stays recomputable forever. What is still owed is a **success-threshold
+> sensitivity sweep**, run alongside the Phase-3 cost-ratio sweep — same shape of
+> analysis, same figure logic. This is cheap insurance against the headline
+> resting on an arbitrary constant.
+- **`wallclock` is per-chunk, not per-episode**, because vectorised episodes step
+  in lockstep and cannot be timed apart. `episodes_in_chunk` is logged alongside
+  it so that ambiguity is never lost. Everything else is exact per-episode:
+  `MultiStepWrapper.step()` breaks immediately once an env is done, so a finished
+  episode stops accruing both reward and policy calls — which is what makes
+  `total_replans` and `total_denoising_passes` genuinely per-episode rather than
+  chunk-averaged.
+
+**Note on `src/logging/`:** that package name shadows the stdlib `logging` module
+if `src/` itself is ever put on `sys.path`. Always put the repo root on the path
+and import `src.logging.rows`. Never add `src/` directly.
 
 ## Step 4 — LIBERO (Week 2)
 
