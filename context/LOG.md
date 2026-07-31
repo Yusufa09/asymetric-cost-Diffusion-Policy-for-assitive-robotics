@@ -60,6 +60,94 @@ Log hours per session — it feeds the ISEF forms and tracks against the
 
 ---
 
+## 2026-07-31 — AWS GPU quotas: denied, appealed, approved. Compute unblocked.  (~2 hrs)
+
+**Goal:** Check the two EC2 quota requests filed 2026-07-28, and resolve the
+compute-stack decision that was explicitly gated on them.
+
+**Did.** Read the AWS correspondence, drafted appeals for both denials, submitted
+them, and read the outcomes.
+
+Cases, both filed 2026-07-28 15:47 ET in `us-east-1`:
+
+| Case | Quota | Code | Asked |
+|---|---|---|---|
+| 178526806600160 | `Running On-Demand G and VT instances` | `L-DB2E81BA` | 8 vCPU |
+| 178526807000059 | `All G and VT Spot Instance Requests` | `L-3819A6DF` | 16 vCPU |
+
+Both **denied 2026-07-28 16:35 ET**, 48 minutes after filing, with byte-identical
+template text: *"Service quotas are put in place to help you gradually ramp up
+activity and decrease the likelihood of large bills due to sudden, unexpected
+spikes."* Not an auto-denial — a human acknowledged at 15:48 restating the exact
+quota and target value before declining. Both invited appeal by reopening with a
+detailed use case.
+
+Appeal reasoning, which is the part worth keeping: the template says *bills*, but
+a three-day-old account with no billing history requesting G-family GPU capacity
+in `us-east-1` is feature-for-feature the **crypto-mining fraud profile**. The
+appeal's job is therefore not to argue research merit — a Tier-1 agent will not
+read a paper — it is to look unlike a miner. Four levers used: (1) the ask is
+*exactly* one `g5.2xlarge`, not headroom to scale out; (2) $200 of credit is a
+hard spend ceiling, so a large bill is structurally impossible; (3) named public
+upstream software a miner would never cite — `real-stanford/diffusion_policy` and
+`Lifelong-Robot-Learning/LIBERO`, both verified HTTP 200 before sending; (4) an
+explicit offer to **accept a smaller increase or lower initial cap**, which
+inverts the signal since abuse requests never negotiate down. Evidence of a real
+workload came from the reproduced PushT baseline (0.945 vs 0.969 published, n=50).
+Decided against attaching a paper — it answers a question nobody asked. School and
+magnet-program name were cut for privacy, at a known cost in verifiable
+affiliation.
+
+Appeals submitted **2026-07-30 00:56 ET** on both cases (via **Reply**, not
+"Resolve case" — neither case had actually been closed, so no reopen was needed).
+
+**Observed.** Both appeals succeeded:
+
+- **178526806600160 — approved in full**, 2026-07-30 08:49 ET (Pradnya K.). New
+  quota 8. Escalated to the EC2 service team at 02:43 before approval.
+- **178526807000059 — partially approved**, 2026-07-30 12:30 ET (Harshit S.).
+  8 vCPU of the 16 requested; remainder routed to AWS Sales rather than denied.
+
+Net: **8 vCPU on-demand + 8 vCPU Spot G/VT in `us-east-1`** = one `g5.2xlarge`
+either way. Verified applied in the Service Quotas console. $200 credit confirmed
+resident on account `051388699393`. Appeal-to-resolution turnaround ~8 hrs
+(on-demand) and ~12 hrs (Spot) — far inside the 1–5 business days SETUP assumed.
+
+Consequence not previously modeled: at the *estimated* ~$1.5/hr, $200 buys roughly
+**130 GPU-hr** against `PLAN.md`'s 350–650 GPU-hr estimate. **One account does not
+fund this project.** It funds Phase 0 and probably Phase 1. Accounts two and three
+are now derisked, though — the quota path is a known, ~2-day, winnable procedure
+rather than a gamble.
+
+**Broke / dead ends.** ~20 min lost searching the wrong mailbox. The Gmail MCP is
+bound to `yusufaae09@gmail.com` only, and every AWS query against it returned
+empty — which reads as "no reply yet" rather than "wrong account," so the failure
+was silent and misleading. Apple Mail has **four** accounts configured; the AWS
+correspondence lives on **`free.yusuf999@gmail.com`**, account **`051388699393`**.
+Resolved by enumerating accounts via AppleScript through the Control-your-Mac MCP.
+Recorded here because it will recur every time this project touches AWS mail.
+
+Also noted: the Spot approval opens "Hello Team" and refers to *"your
+mid-September launch timeline"*, which appears in neither case and contradicts the
+January 2027 date actually submitted. The agent appears to have crossed wires with
+another ticket. Harmless to the outcome, but **do not repeat that date back to
+AWS** if Sales is ever contacted.
+
+**Integrity flag — the submitted appeal text is currently inaccurate.** Both
+appeals assert *"I have Budgets alarms set on the credit balance."* They are not
+set. This was flagged as blocking before sending and went out anyway. It is a
+written claim to AWS support inside a risk argument, and it is the one thing
+standing between a forgotten instance and the credits just won. Setting them
+closes the gap; it is a 10-minute task and it is now a hard gate on launching.
+
+**Decided.** AWS EC2 `g5.2xlarge` is the Phase 0/1 compute platform; credits are
+spent before cash. This reverses a recommendation made three times earlier in the
+same session. → `DECISIONS.md`.
+
+**Next.** LIBERO task-ID verification + LIBERO-Plus / LIBERO-Pro perturbation
+audit — 90 min, no GPU required, still the highest-leverage block in the schedule.
+Budgets alarms before any instance launch.
+
 ## 2026-07-29 — Execution starts: DP installed, PushT baseline reproduced, DP vendored  (~4.5 hrs)
 
 **Goal:** Break the two-week planning-only streak. Execute the Week-1 spine:

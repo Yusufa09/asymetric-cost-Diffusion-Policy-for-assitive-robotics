@@ -433,21 +433,60 @@ aws service-quotas list-service-quotas --service-code sagemaker --region us-east
 - EC2 G-family: **both quotas default to 0 vCPU** on new accounts and are
   separately adjustable. Units are vCPUs, not instances.
 
+Account **`051388699393`**, AWS correspondence on **`free.yusuf999@gmail.com`**
+(*not* the primary Gmail — this has already cost one session ~20 min).
+
 | Quota | Code | Requested | Status |
 |---|---|---|---|
-| `Running On-Demand G and VT instances` | `L-DB2E81BA` | 8 vCPU | **PENDING** (filed 2026-07-28, `us-east-1`) |
-| `All G and VT Spot Instance Requests` | `L-3819A6DF` | 16 vCPU | **PENDING** (filed 2026-07-28, `us-east-1`) |
+| `Running On-Demand G and VT instances` | `L-DB2E81BA` | 8 vCPU | **GRANTED 8** (2026-07-30, on appeal) |
+| `All G and VT Spot Instance Requests` | `L-3819A6DF` | 16 vCPU | **GRANTED 8 of 16** (2026-07-30, on appeal) |
 
 ```bash
 aws service-quotas list-requested-service-quota-change-history --service-code ec2 --region us-east-1 --output table
 ```
 
-Auto-denial within minutes is common and expected. Escalation path: Support →
-Create case → **Service limit increase** or **Account and billing** (both free on
-Basic; *not* Technical, which needs a paid plan). The strongest justification line
-is that the account already runs SageMaker GPU workloads, so EC2 access is being
-requested for cost efficiency on batch evaluation — verifiable in-account
-evidence that this is a real workload.
+#### The appeal procedure that actually worked (verified 2026-07-28 → 07-30)
+
+Both requests were **denied in 48 minutes** with an identical template citing
+*"large bills due to sudden, unexpected spikes."* Both were then **approved on
+appeal within ~8–12 hours.** Expect this sequence; the first denial is not a real
+answer.
+
+Escalation path: Support → Create case → **Service limit increase** or **Account
+and billing** (both free on Basic; *not* Technical, which needs a paid plan). If
+the denial arrives on an existing case, **Reply on that case — do not open a new
+one, and do not click "Resolve case."** A denied quota case stays *open*, so no
+"reopen" step is needed despite what the denial email says.
+
+**What the denial is actually screening for.** The template says *bills*, but a
+new account with no billing history requesting G-family GPU in `us-east-1` matches
+the crypto-mining fraud profile. The appeal must argue *risk*, not research merit
+— a Tier-1 agent will not read a paper, and attaching one is wasted effort. Four
+levers, in descending order of observed value:
+
+1. **Offer to accept less.** "I'm happy to accept a smaller increase or a lower
+   initial cap if that makes it easier to approve." Abuse requests never negotiate
+   down. Costs nothing when one instance is all you need anyway.
+2. **Make the ask exactly one instance** and say so — 8 vCPU *is* one
+   `g5.2xlarge`, not headroom to scale out.
+3. **Name the spend ceiling.** $200 of credit makes a large bill structurally
+   impossible; say that explicitly against their stated reason.
+4. **Link public upstream software** a miner would never cite
+   (`real-stanford/diffusion_policy`, `Lifelong-Robot-Learning/LIBERO`). Verify
+   the URLs resolve first — a 404 reads as fabrication. **Never link this repo
+   while it is private**, for the same reason.
+
+A named school or program adds verifiable affiliation and is the cheapest
+remaining signal, if privacy allows.
+
+> The earlier advice here — justify via existing in-account SageMaker GPU usage —
+> was **never tested**, because no SageMaker workload had run. Do not rely on it.
+
+**Spot quotas above one instance route to AWS Sales**, not to support. The
+remaining 8 vCPU of the Spot request was deferred there
+(`aws.amazon.com/contact-us/aws-sales/`). Not pursued: it only buys interruption
+handoff, and Sales conversations orbit spend commitments, which is a poor use of
+time on a credit-funded account.
 
 **Region discipline: `us-east-1`, always.** Quotas, AMIs, S3 buckets, and egress
 all care, and requesting a quota in the wrong region is the most common wasted

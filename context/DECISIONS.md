@@ -10,6 +10,52 @@ if it changes downstream work.
 
 ---
 
+## 2026-07-31 — AWS EC2 `g5.2xlarge` is the Phase 0/1 compute platform; credits before cash
+
+**What.** The compute stack, open since the project began, is now partly closed.
+Phase 0 and Phase 1 run on **EC2 `g5.2xlarge` in `us-east-1`** on AWS account
+`051388699393`, funded by its $200 of credit. RunPod and Vast are **not** rejected
+— they are held in reserve for the Phase-2 grid. Kaggle and Colab are out.
+SageMaker is not chosen; EC2 quota was won, which removes the reason SageMaker was
+attractive (instant self-service grant to 1 instance).
+
+**Why.** Two EC2 G-family quota appeals were approved on 2026-07-30, giving 8 vCPU
+on-demand and 8 vCPU Spot — one `g5.2xlarge` either way, which is exactly what
+single-GPU LIBERO reproduction needs. That removed the blocker.
+
+The provider choice then turns on a distinction earlier analysis missed. On raw
+price AWS loses badly: `LOG.md` 2026-07-28 priced $200 at ~130 GPU-hr on AWS
+versus ~570 on a RunPod 4090, roughly 4×. But that comparison treats both as the
+same kind of money and they are not. **The AWS $200 is credit; RunPod is cash, and
+the payment methods on this project belong to other people.** Free credit at a bad
+rate beats cheap cash that requires asking someone. The correct sequencing is
+therefore to exhaust credits first and treat cash as the reserve, which is the
+reverse of what $/GPU-hr alone would suggest.
+
+Worth recording that this reverses a recommendation made three times earlier in
+the same session — "provision RunPod today, don't wait on AWS." That advice was
+correct *while blocked*, and stopped being correct the moment the quota landed. It
+was conditioned on a premise that expired.
+
+**Consequences.**
+
+- **One account does not fund the project.** ~130 GPU-hr of credit against
+  `PLAN.md` §10's 350–650 GPU-hr estimate covers Phase 0 and probably Phase 1, not
+  the Phase-2 grid. Accounts two and three ($600 max) are now a *planned* step
+  rather than a contingency, and the quota appeal is a known ~2-day procedure —
+  budget that time per account instead of assuming instant access.
+- **Every new account repeats the quota fight.** Procedure and the argument that
+  actually worked are in `SETUP.md` § Quotas. Do not open an account expecting
+  same-day GPU.
+- **Budgets alarms are now a hard gate, not hygiene.** One `g5.2xlarge` left
+  running drains the credit in under six days, and the credit is now the binding
+  constraint on the whole phase.
+- The `n_envs`-on-GPU question resolves against A10G 24 GB specifically, not
+  against whatever a 4090 would have done. If Phase 2 later moves to RunPod, that
+  measurement does not transfer.
+- `PLAN.md` §10's "no provider has been chosen" caveat is **no longer accurate**
+  for Phases 0–1 and must be updated at the Week-4 phase gate.
+
 ## 2026-07-29 — Diffusion Policy is vendored into this repo, not pinned by hash
 
 **What.** `external/diffusion_policy/` is committed to this repo in full — 369

@@ -8,13 +8,13 @@ instant it closes** — not archived here. History lives in `LOG.md` and
 force is closure. Sections are ordered by how often they change, so a routine
 session only rewrites the top.
 
-_Last updated: 2026-07-29_
+_Last updated: 2026-07-31_
 
 ---
 
 ## Current position
 
-**Phase 0 — Setup & Baseline. Week 2 of 28.**
+**Phase 0 — Setup & Baseline. Week 3 of 28.**
 
 > **Week 1 starts 2026-07-17 (a Friday); weeks run Fri–Thu.** The week number is
 > *computed from this anchor*, never asserted from memory:
@@ -28,6 +28,12 @@ _Last updated: 2026-07-29_
 baseline reproduces: `test/mean_score` **0.9453** vs published **0.969** (n=50,
 0.87 se, 95% CI contains the published value). 58 Table A rows exist, archived and
 restore-tested. Diffusion Policy is now vendored into this repo.
+
+**GPU access is live as of 2026-07-30.** Both EC2 quota requests were denied in 48
+minutes and then **approved on appeal**: 8 vCPU on-demand (full ask) and 8 vCPU
+Spot (of 16 asked). That is one `g5.2xlarge` either way in `us-east-1` on account
+`051388699393` — exactly what single-GPU LIBERO work needs. **Nothing now blocks
+LIBERO except doing it.**
 
 **The Phase-0 gate is half met.** PushT is done. LIBERO is untouched and is now
 the entire critical path.
@@ -55,15 +61,26 @@ Do this *before* downloading anything large — see the disk warning below.
   information about it: different stack, different conda env, needs a GPU. If
   LIBERO checkpoints don't reproduce, everything downstream compresses against the
   Thanksgiving and January walls.
+- **⚠ Budgets alarms are still not configured, and the AWS appeal text says they
+  are.** Both submitted appeals assert *"I have Budgets alarms set on the credit
+  balance"* as part of the risk argument that won the quota. They are not set.
+  This is a **hard gate on launching any instance** — one `g5.2xlarge` left
+  running drains $200 in under six days, and that credit is now the binding
+  constraint on the whole phase. ~10 minutes to close. Alarm on credit *balance*,
+  not just spend.
 - **⚠ Disk: 31 GB free, and the LIBERO demo datasets total ~100 GB.** Do **not**
   run `download_libero_datasets.py` without `--datasets`. You need at most
   `libero_object` and `libero_goal` (est. ~15–20 GB, per-suite sizes unverified),
   and arguably only 3 individual task HDF5 files. **Demo data belongs on the GPU
   instance, not this laptop** — it is training data and training is cloud work.
   Locally you need only the LIBERO code and sim assets.
-- **Schedule: on time as of this session, but Week 3 opens 2026-07-31.** The
-  Week-1 spine that was two sessions overdue is now closed. Week 2's items are due
-  now and are unstarted.
+- **Credits do not cover the project.** ~130 GPU-hr (at the *estimated* ~$1.5/hr)
+  against `PLAN.md` §10's 350–650 GPU-hr estimate. Funds Phase 0 and probably
+  Phase 1, not the Phase-2 grid. Accounts 2 and 3 are now a planned step, and each
+  repeats the ~2-day quota appeal — do not assume same-day GPU on a new account.
+- **Schedule: Week 3 as of 2026-07-31, and Week 2's three LIBERO items are still
+  unstarted.** They are no longer blocked on anything. The Phase-0 gate is Week 4
+  (~Aug 13).
 
 ## Open decisions — mine to make
 
