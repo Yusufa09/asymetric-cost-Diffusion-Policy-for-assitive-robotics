@@ -48,10 +48,14 @@ quantitative platform and LIBERO becomes video-only.
 **Verify the 3 LIBERO task IDs exist with the right observation/action space, and
 audit LIBERO-Plus / LIBERO-Pro for existing perturbation harnesses.** Budget 90
 minutes for the audit — `PLAN.md` calls it the highest-leverage 90 minutes in the
-schedule, and this session made that sharper: **PushT turned out to already ship
+schedule, and 2026-07-29 made that sharper: **PushT turned out to already ship
 two of the three disturbances** (see Queued below), so the odds that LIBERO does
 too are better than assumed. If either repo implements object shift or occlusion,
 Phase 1 compresses by ~2 weeks and you inherit a standard others recognize.
+
+**No GPU needed for this, so it does not wait on the Budgets alarms** — do the
+audit first, set the alarms, then launch. Doing it in that order avoids paying for
+GPU time while reading repos.
 
 Do this *before* downloading anything large — see the disk warning below.
 
@@ -84,13 +88,14 @@ Do this *before* downloading anything large — see the disk warning below.
 
 ## Open decisions — mine to make
 
-- **Compute stack — still entirely undecided. No provider chosen.** AWS
-  (SageMaker or EC2), RunPod, Vast, Kaggle and Colab all remain live. Currently
-  **1 account open** ($200, untouched); two more can be opened whenever needed, for
-  a $600 maximum. **Resolving after the EC2 quota requests come back.** Phase 1
-  will also supply a *measured* GPU-hr figure to replace the current estimate.
-  Nothing in Phase 0's PushT work was blocked by this; **LIBERO is the first thing
-  that actually needs a GPU, so this now gates real work.**
+- **Compute stack — closed for Phases 0–1, still open for Phase 2.** EC2
+  `g5.2xlarge` on account `051388699393` ($200 credit, confirmed resident) runs
+  Phase 0 and Phase 1. RunPod and Vast are held in reserve for the Phase-2 grid
+  and are *not* rejected; Kaggle and Colab are out; SageMaker is unchosen. The
+  open question is only **what funds Phase 2** — accounts 2 and 3 ($600 max) or
+  cash on RunPod. Reasoning in `DECISIONS.md` 2026-07-31: credit beats cheap cash
+  because the payment methods belong to other people. **Decide once Phase 1
+  supplies a measured GPU-hr figure**, which replaces the load-bearing estimate.
 - **Tier-2 backup destination.** Must **not** be colocated with compute — the AWS
   accounts auto-close and would take their S3 buckets with them. Leading candidate
   is Google Drive. **Not yet urgent:** no `intermediate_state_ref` blobs exist, so
@@ -109,12 +114,6 @@ Do this *before* downloading anything large — see the disk warning below.
 
 Things I don't control. Cheap to check, expensive to forget.
 
-- **Two EC2 quota requests, filed 2026-07-28 in `us-east-1`, both PENDING.**
-  `Running On-Demand G and VT instances` → 8 vCPU (`L-DB2E81BA`) and
-  `All G and VT Spot Instance Requests` → 16 vCPU (`L-3819A6DF`). Expect 1–5
-  business days; auto-denial within minutes is common and expected. **On denial,
-  open a support case** — escalation path and justification wording in `SETUP.md`
-  § Quotas.
 - **ScienceMontgomery 2027 registration — not yet open** (checked 2026-07-28).
   Re-check periodically. The abstract/registration deadline remains the one hard
   external wall, and it lands weeks before the March fair.
@@ -153,6 +152,14 @@ Parked deliberately, with the reason and when it comes back. Not forgotten.
 - **Sponsor outreach.** Pitch idea + preliminary result, not a cold ask. **A
   reproduced baseline now exists**, so this is unblocked. Target postdocs / senior
   PhD students. **Returns: Week 4+.**
+- **The remaining 8 vCPU of Spot quota.** AWS granted 8 of 16 and routed the rest
+  to **AWS Sales** (`aws.amazon.com/contact-us/aws-sales/`), not support. Skipped
+  deliberately: it only buys checkpoint-resume handoff across a Spot reclaim, and
+  Sales conversations orbit spend commitments — poor value on a credit-funded
+  account. **Returns: only if the Phase-2 grid actually needs concurrency.** If
+  contacted, give the real January 2027 timeline — the approving agent's reply
+  cited a "mid-September launch" that appears nowhere in either case and looks
+  like a crossed wire with another ticket.
 - **Drive copies not yet retired.** Repo is the source of truth; delete or mark the
   Drive versions read-only before they drift. **Returns: whenever, but soon.**
 
@@ -176,7 +183,11 @@ Easy to skip, costly to skip.
   a MANIFEST line. Done 2026-07-29 and restore-tested.
 - **Budget alarms before launching any GPU instance.** Payment methods belong to
   other people; a forgotten instance drains $200 in under six days. Alarm on credit
-  *balance*, not just spend.
+  *balance*, not just spend. **Currently unmet — see Blocked.**
+- **AWS mail lives on `free.yusuf999@gmail.com`, not the primary Gmail.** Account
+  `051388699393`. The Gmail MCP is bound to `yusufaae09@gmail.com` and returns
+  *empty* for AWS queries, which reads as "no reply yet" rather than "wrong
+  inbox." Cost 20 min on 2026-07-31. Use Apple Mail for anything AWS.
 
 ## Checklists
 
@@ -186,17 +197,21 @@ Easy to skip, costly to skip.
       and whether the instant self-service grant covers *training job* /
       *processing job* / *spot training job* usage types or only notebook/Studio.
       Query in `SETUP.md` § Quotas.
-- [ ] Verify the true `ml.g5.2xlarge` $/hr off Cost Explorer once real hours exist.
-      The ~$1.5/hr figure is an *estimate* and it is load-bearing.
-- [ ] Configure Budgets alarms on credit balance, on every account before
-      launching anything.
+- [ ] Verify the true `g5.2xlarge` $/hr off Cost Explorer once real hours exist.
+      The ~$1.5/hr figure is an *estimate* and it is load-bearing — it is what
+      turns $200 into "~130 GPU-hr" and therefore what says one account is not
+      enough.
+- [ ] **Configure Budgets alarms on credit balance** — blocking, see Blocked.
+- [x] EC2 G/VT quota granted and verified in the Service Quotas console —
+      8 vCPU on-demand + 8 vCPU Spot, `us-east-1`, account `051388699393`
+- [x] $200 credit confirmed resident on `051388699393`
 
-**Week 2 — due now**
+**Week 3 — due now (all three carried from Week 2, no longer blocked)**
 
 - [ ] Verify the 3 LIBERO task IDs
 - [ ] Audit LIBERO-Plus / LIBERO-Pro for existing perturbation harnesses (90 min)
 - [ ] Reproduce DP on one LIBERO task; confirm success rate near published —
-      **needs the compute decision first**
+      **needs Budgets alarms first**
 - [x] Install Diffusion Policy; PushT running on CPU end-to-end — `robodiff` env,
       procedure in `SETUP.md` § Step 1
 - [x] Evaluate a released low-dim PushT checkpoint; emit Table A rows — run
@@ -205,13 +220,15 @@ Easy to skip, costly to skip.
       instrument-from-day-one) — `src/logging/rows.py`, 58 rows in
       `logs/archive/table_a_20260729.jsonl.gz`
 - [x] Backup + restore test — `logs/archive/MANIFEST.md`, verified byte-identical
+- [x] EC2 GPU quota won on appeal — procedure recorded in `SETUP.md` § Quotas
 
 **Queued**
 
 - [ ] Wk 4: Phase-0 gate — verify DP on all 3 LIBERO tasks, snapshot reproducible
       baseline
-- [ ] Wk 4: at the phase gate, re-check `PLAN.md` §10 — its "no provider has been
-      chosen" caveat is **still accurate**; update it only once one actually is
+- [ ] Wk 4: at the phase gate, update `PLAN.md` §10 — its "no provider has been
+      chosen" caveat is **now stale for Phases 0–1** (EC2 `g5.2xlarge` chosen
+      2026-07-31). It remains accurate for the Phase-2 grid only.
 - [ ] Wk 5: object-shift injector. **Only object-shift needs building** — PushT
       already ships `keypoint_visible_rate` (occlusion) and `n_latency_steps`
       (delayed observation). Caveat: visibility resamples every step rather than
@@ -222,6 +239,9 @@ Easy to skip, costly to skip.
 
 Full archive with reasoning in `DECISIONS.md`.
 
+- **2026-07-31** — EC2 `g5.2xlarge` is the Phase 0/1 compute platform; credits are
+  spent before cash, because the AWS $200 is credit and RunPod is cash that
+  belongs to someone else. Phase-2 funding still open.
 - **2026-07-29** — Diffusion Policy vendored into this repo (369 files, MIT,
   unmodified at `5ba07ac`) rather than pinned by hash; `.gitignore` uses per-repo
   opt-in so LIBERO's ~100 GB can never be swept in by a blanket rule.
