@@ -307,10 +307,22 @@ git clone --depth 1 https://github.com/Lifelong-Robot-Learning/LIBERO.git extern
 
 - Pinned commit: `8f1084e3132a39270c3a13ebe37270a43ece2a01` (2025-03-15, HEAD of
   `main` at clone time 2026-08-02). Repo appears unmaintained since then.
-- Clone size **650 MB** (404 MB `libero/libero/assets`, 13 MB `init_files`). Disk
-  after clone: 28 GB free. The 100 GB warning applies to the *datasets* only.
-- Not yet vendored (`external/LIBERO` is gitignored). Vendor the code only if/when
-  it is needed, per the vendoring policy above — and delete its `.git` first.
+- **VENDORED 2026-08-02** — committed in full, same policy as Diffusion Policy.
+  **426 MB, 1116 files**, MIT (© 2023 Lifelong Robot Learning), LICENSE retained,
+  nested `.git` removed before staging. Details in `external/README.md`.
+- 404 MB of the 426 is `libero/libero/assets` (MuJoCo meshes/textures). Those are
+  vendored deliberately: without them the sim does not run, so "code only" means
+  *not the demo datasets*, not *not the assets*.
+- **Datasets are not vendored and must never be.** Two guards on
+  `external/LIBERO/libero/datasets/` — LIBERO's own nested `.gitignore`, and an
+  explicit line in the top-level `.gitignore`. The second is the one that counts.
+- **Bug found while vendoring, fixed:** the top-level `.gitignore` rule `data/`
+  was unanchored, so it matched a directory named `data` at *any* depth and
+  silently dropped `libero/configs/data/default.yaml` — the file this section
+  cites for obs modalities and `obs_key_mapping`. Anchored to `/data/`. **After
+  vendoring anything, diff files-on-disk against files-staged**; the command is in
+  `external/README.md`. Diffusion Policy was checked at the same time and is
+  clean — its 28 uncommitted files are all `__pycache__/*.pyc`.
 
 ### Observation / action space — VERIFIED 2026-08-02 by reading the code
 

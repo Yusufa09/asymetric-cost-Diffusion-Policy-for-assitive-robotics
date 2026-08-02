@@ -8,6 +8,17 @@ external/*
 # upstream commit 5ba07ac6661db573af695b419a7947ecb704690f. MIT licensed;
 # LICENSE file is included in the vendored tree as that license requires.
 !external/diffusion_policy/
+# LIBERO is VENDORED (decision 2026-08-02): committed in full at upstream commit
+# 8f1084e3132a39270c3a13ebe37270a43ece2a01. MIT licensed; LICENSE file retained.
+# 426 MB / 1116 files — 404 MB of that is libero/libero/assets (MuJoCo meshes and
+# textures), which are as load-bearing as the code: without them the sim does not
+# run, so "code only" here means "not the demo datasets."
+!external/LIBERO/
+# The ~100 GB of demonstration HDF5 lands in external/LIBERO/libero/datasets/.
+# LIBERO's own nested .gitignore already ignores `datasets`, but that is a
+# third-party file we do not control — this line is the guard that must not be
+# removed. Demo data belongs on the GPU instance, never in git.
+external/LIBERO/libero/datasets/
 
 # Raw experiment output — the source of truth and the only irreplaceable
 # artifact in this project. (Parent dirs must be re-included explicitly or git
@@ -29,8 +40,14 @@ logs/archive/*
 !logs/archive/*.csv.gz
 !logs/archive/MANIFEST.md
 
-data/
-outputs/
+# ROOT-ANCHORED (fixed 2026-08-02). Unanchored `data/` matches a directory named
+# `data` at ANY depth, which silently dropped external/LIBERO/libero/configs/data/
+# default.yaml from the vendored tree — the file defining obs modalities and the
+# obs_key_mapping. Caught by diffing files-on-disk against files-staged; a vendored
+# tree missing a file is exactly the kind of thing that is invisible until it
+# breaks in November. Keep the leading slash.
+/data/
+/outputs/
 wandb/
 
 # Checkpoints
