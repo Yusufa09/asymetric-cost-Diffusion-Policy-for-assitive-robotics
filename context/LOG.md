@@ -60,6 +60,123 @@ Log hours per session — it feeds the ISEF forms and tracks against the
 
 ---
 
+## 2026-08-02 — LIBERO audited without installing it. Three planned tasks don't exist; no DP checkpoint does either.  (~2.5 hrs)
+
+**Goal:** Close the two Week-2 carryover items — verify the 3 LIBERO task IDs, and
+audit LIBERO-Plus / LIBERO-Pro for an adoptable perturbation harness. Both are
+GPU-free, so neither waits on the Budgets alarms.
+
+**Did.** Cloned LIBERO code only — `git clone --depth 1`, pinned
+`8f1084e3132a39270c3a13ebe37270a43ece2a01` (2025-03-15; repo looks unmaintained
+since). **650 MB** (404 MB assets, 13 MB init_files), disk still 28 GB free. Did
+*not* run `download_libero_datasets.py`; the ~100 GB is demo HDF5 and belongs on
+the instance.
+
+Then read the repo instead of installing it. **No robosuite, no mujoco, no conda
+env, no GPU** — task definitions, the env wrapper, the benchmark registry and the
+BDDL files are all plain text. This is worth repeating for LIBERO-side questions
+in future sessions: the arm64 mujoco tax is avoidable for anything static.
+
+Verified from source: Panda + `OSC_POSE`; **action dim 7** (6 delta-pose +
+gripper, hard-coded at `libero/lifelong/metric.py:120` as `np.zeros((env_num,7))`);
+obs = `agentview` + `robot0_eye_in_hand` RGB **128×128** plus `gripper_states`(2)
+and `joint_states`(7) (`libero/configs/data/default.yaml:25-34`); 20 Hz.
+
+**Observed — five findings, in ascending order of how much they cost.**
+
+1. **Indexing trap.** Canonical task order is `libero_suite_task_map.py`, **not**
+   `bddl_files/*/tasks_info.txt`. The two list the same 10 tasks in different
+   orders. Published per-suite results index against the map. Using the wrong one
+   mislabels every task silently.
+
+2. **Two injector primitives already exist**, both in `envs/env_wrapper.py`:
+   `get_sim_state()` → flattened MuJoCo state (line 118) is exactly what
+   `intermediate_state_ref` was deferred to point at — that deferred decision is
+   implementable as written. `set_state()` / `regenerate_obs_from_state()` (lines
+   127-145) set state → `sim.forward()` → re-derive observables, which is the
+   object-shift injector: read state, displace target qpos, write back
+   mid-episode.
+
+3. **The three planned framings do not exist in LIBERO.** Not "not found" —
+   absent. `PLAN.md` §0 row 1 names handover, retrieve-dropped-object, and
+   drawer/container. Only the third exists (`libero_goal[0]
+   open_the_middle_drawer_of_the_cabinet`). There is no handover task in any
+   suite and no dropped-object task; nearest analogues are pick-place into a
+   receptacle and `libero_spatial[4]` (retrieve from a drawer). Worse, all 10
+   `libero_object` tasks are **one template** differing only in grocery item, so
+   drawing two framings from that suite would have been the same task twice.
+
+4. **Perturbation audit — verdict: build the injector.** LIBERO-Plus
+   ([2510.13626](https://arxiv.org/abs/2510.13626), 7 axes, 10,030 tasks) and
+   LIBERO-PRO ([2510.03827](https://arxiv.org/abs/2510.03827), 4 axes) both
+   perturb **at episode initialization only**. Neither injects anything during
+   execution, which is the entire premise here. So `PLAN.md` §3 Wk 5's hoped-for
+   ~2-week Phase-1 compression **does not happen** — the branch the plan called
+   "you've confirmed your injector is worth building." Partial credit: LIBERO-Plus
+   O2 "Target Object Pose" is reusable displacement code, and neither implements
+   occlusion or delayed observation, so those remain fully ours. Genuine gain: a
+   sharpened, citable prior-work distinction — *they perturb the initial
+   condition and ask whether the policy still succeeds; we perturb during
+   execution and ask whether it notices in time.*
+
+5. **No released DP-on-LIBERO checkpoint, and no per-task published numbers.**
+   Searched OpenVLA-OFT and the LeRobot hub (which ships `diffusion_pusht`,
+   `pi0_libero_base`, `pi05_libero_base`, `xvla-libero` — no DP-LIBERO). Scope
+   as *not found*, not *proven absent*. The cited DP baseline **78.3 / 92.5 /
+   68.3 / 50.5** (Spatial/Object/Goal/Long) comes from
+   [OpenVLA-OFT Table I](https://arxiv.org/html/2502.19645v1), attributed to Kim
+   et al., **trained from scratch**, protocol 10 tasks × 50 episodes = 500 trials
+   **averaged per suite**. Also verified: **DP trains one policy per suite**, so
+   the suite is the cost unit, not the task.
+
+**Broke / dead ends.** No build failures — nothing was installed. The real cost
+was a **wrong recommendation I made and then had to reverse mid-session**: I first
+recommended all three tasks from `libero_goal` on the reasoning that it is the
+only suite with mechanically distinct skills. That was wrong, and the evidence is
+in the BDDL files. Every `libero_goal` task is the same problem
+(`LIBERO_Tabletop_Manipulation`) with an **identical object set**
+`{akita_black_bowl_1, cream_cheese_1, wine_bottle_1, plate_1}` — same scene, same
+objects, only the goal predicate differs. DP has **no language conditioning**, so
+a suite policy cannot tell those 10 tasks apart from the image. That is not a
+curiosity, it is the published ranking: Object 92.5 (distinct object sets per
+task) > Spatial 78.3 (two identical bowls) > Goal 68.3 (one scene, ten goals).
+**And it would have contaminated the headline** — the control signal is
+inter-chunk consistency, so in a goal-ambiguous scene the policy is legitimately
+multimodal with *no disturbance present*, inflating nominal inconsistency,
+inflating the conformal threshold calibrated on nominal rollouts, and making
+disturbance indistinguishable from the policy never having known which task it
+was doing. Caught by diffing `(:objects` blocks across suites — ~20 min to find,
+would have cost a phase to discover in November.
+
+Second thing that needed correcting: I framed the per-suite/per-task choice as
+fixed, when it is not. The ambiguity confound is a property of the **training
+recipe**, not the suite — a single-task policy has one goal and no ambiguity. Also
+verified `libero_object` is `LIBERO_Floor_Manipulation` (fixture: `floor`) while
+Spatial and Goal are `LIBERO_Tabletop_Manipulation`, so a hand-picked cross-suite
+set *would* be visually disambiguable. That option was priced and rejected on
+budget, not on correctness.
+
+**Decided.** Phase 0/1 platform is the **`libero_object` suite**, per-suite
+training, one run — see `DECISIONS.md`. Gate rewritten to suite average within
+±5 points of 92.5%, band declared before looking. Also settled by evidence rather
+than choice: the disturbance injector gets built from scratch.
+
+**Schedule read.** Week 3 of 28 (`floor((Aug 2 − Jul 17)/7)+1`). One week behind
+on the LIBERO track, ahead on infrastructure. But the week is the small part —
+findings 4 and 5 are **~2–3 weeks of scope that was not in the plan** (Phase 0 is
+now a training task; Phase 1 does not compress) against 2 weeks of designed buffer
+in Phase 4. Buffer is now spoken for; treat Phase 4 as catch-up. Front-loading
+risk before Thanksgiving (Wk 19) is now binding, not advisory. Offsetting good
+news: **Phase 3, the headline, needs no GPU at all.**
+
+**Next.** Budgets alarm on credit balance (~10 min, still unmet and still the hard
+gate). Then launch `g5.2xlarge`, install the LIBERO env, pull `libero_object`
+only, and **before training, time one rollout and one training epoch** — that
+20-minute measurement replaces both the ~$1.5/hr and ~130-GPU-hr estimates, which
+are load-bearing and unmeasured, and settles the `n_envs`-on-GPU question.
+
+---
+
 ## 2026-07-31 — AWS GPU quotas: denied, appealed, approved. Compute unblocked.  (~2 hrs)
 
 **Goal:** Check the two EC2 quota requests filed 2026-07-28, and resolve the

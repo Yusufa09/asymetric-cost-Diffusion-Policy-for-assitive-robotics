@@ -296,20 +296,197 @@ Two schema decisions made here, both additive to `SPEC.md` Table A:
 if `src/` itself is ever put on `sys.path`. Always put the repo root on the path
 and import `src.logging.rows`. Never add `src/` directly.
 
-## Step 4 — LIBERO (Week 2)
+## Step 4 — LIBERO (Week 2/3)
 
-Separate conda env. Pull the repo and start the dataset/asset download early so
-it isn't a bottleneck.
+Separate conda env. **Code only on this laptop** — the ~100 GB of demonstration
+HDF5 belongs on the GPU instance. Do not run `download_libero_datasets.py` here.
 
-- Pinned commit: `TBD`
-- Task IDs (**unverified** — confirm these exist with the right observation/action
-  space before building anything against them):
-  - handover → `TBD` (LIBERO-Object, pick-place framing)
-  - retrieve-dropped → `TBD` (LIBERO-Object)
-  - drawer/container → `TBD` (LIBERO-Goal — contains drawer/cabinet tasks)
+```bash
+git clone --depth 1 https://github.com/Lifelong-Robot-Learning/LIBERO.git external/LIBERO
+```
 
-Also audit **LIBERO-Plus** and **LIBERO-Pro** for existing perturbation harnesses
-before writing an injector. 90 minutes, potentially saves ~2 weeks of Phase 1.
+- Pinned commit: `8f1084e3132a39270c3a13ebe37270a43ece2a01` (2025-03-15, HEAD of
+  `main` at clone time 2026-08-02). Repo appears unmaintained since then.
+- Clone size **650 MB** (404 MB `libero/libero/assets`, 13 MB `init_files`). Disk
+  after clone: 28 GB free. The 100 GB warning applies to the *datasets* only.
+- Not yet vendored (`external/LIBERO` is gitignored). Vendor the code only if/when
+  it is needed, per the vendoring policy above — and delete its `.git` first.
+
+### Observation / action space — VERIFIED 2026-08-02 by reading the code
+
+No robosuite install was needed for any of this; it is all readable from the repo.
+
+| | |
+|---|---|
+| robot / controller | Panda, `OSC_POSE` (`libero/libero/envs/env_wrapper.py:16-17`) |
+| action dim | **7** — 6 OSC delta-pose + 1 gripper. Hard-coded in the eval loop's dummy action, `libero/lifelong/metric.py:120` |
+| cameras | `agentview` + `robot0_eye_in_hand`, **128×128** (`env_wrapper.py:31-36`) |
+| obs keys used | rgb `agentview_rgb`, `eye_in_hand_rgb`; low-dim `gripper_states` (2), `joint_states` (7) (`libero/configs/data/default.yaml:25-34`) |
+| control freq | 20 Hz, default `horizon` 1000 (`env_wrapper.py:27-28`) |
+
+**There is no low-dim-only path.** Unlike PushT, every LIBERO rollout renders two
+128×128 camera streams, so **every LIBERO rollout costs GPU**. The CPU-local
+prototyping tier ends at PushT. This changes the per-rollout cost assumption
+behind the ~130 GPU-hr figure and should be remeasured on the first real run.
+
+### Two mechanisms already present that this project needs
+
+Both found in `libero/libero/envs/env_wrapper.py` — worth knowing before writing
+anything in `src/disturbances/`:
+
+- **`get_sim_state()` → `env.sim.get_state().flatten()`** (line 118). This is
+  exactly the MuJoCo sim-state snapshot that `intermediate_state_ref` was
+  deferred to point at (see § Backing up raw results). The deferred decision is
+  directly implementable; no rendered frames needed.
+- **`set_state()` / `regenerate_obs_from_state()`** (lines 127-145) — set flattened
+  MuJoCo state, `sim.forward()`, re-derive observables. **This is the object-shift
+  injector primitive**: read state, displace the target object's qpos, write it
+  back mid-episode.
+
+### Task IDs — suites enumerated, three not yet chosen
+
+Canonical index order comes from `libero/libero/benchmark/libero_suite_task_map.py`,
+**not** from `bddl_files/*/tasks_info.txt` — the two orderings differ, and the map
+is what indexes into published per-suite results. Verified index → name:
+
+| idx | `libero_object` (all 10 identical template) | `libero_goal` |
+|---|---|---|
+| 0 | pick_up_the_alphabet_soup_and_place_it_in_the_basket | **open_the_middle_drawer_of_the_cabinet** |
+| 1 | pick_up_the_cream_cheese_… | put_the_bowl_on_the_stove |
+| 2 | pick_up_the_salad_dressing_… | put_the_wine_bottle_on_top_of_the_cabinet |
+| 3 | pick_up_the_bbq_sauce_… | **open_the_top_drawer_and_put_the_bowl_inside** |
+| 4 | pick_up_the_ketchup_… | put_the_bowl_on_top_of_the_cabinet |
+| 5 | pick_up_the_tomato_sauce_… | push_the_plate_to_the_front_of_the_stove |
+| 6 | pick_up_the_butter_… | put_the_cream_cheese_in_the_bowl |
+| 7 | pick_up_the_milk_… | turn_on_the_stove |
+| 8 | pick_up_the_chocolate_pudding_… | put_the_bowl_on_the_plate |
+| 9 | pick_up_the_orange_juice_… | put_the_wine_bottle_on_the_rack |
+
+**The three planned framings do not map cleanly, and this is a real finding, not
+a lookup failure:**
+
+- **drawer/container opening → exact match.** `libero_goal[0]
+  open_the_middle_drawer_of_the_cabinet`, or `libero_goal[3]` for the
+  open-then-place variant.
+- **handover → does not exist.** LIBERO has no handover task in any suite. The
+  nearest framing is pick-and-place into a receptacle (basket / tray / plate).
+- **retrieve-dropped-object → does not exist.** No dropped-object task. Nearest
+  is retrieval *from a container*: `libero_spatial[4]
+  pick_up_the_black_bowl_in_the_top_drawer_of_the_wooden_cabinet_and_place_it_on_the_plate`.
+- **All 10 `libero_object` tasks are one template** differing only in the target
+  grocery item, so "handover" and "retrieve-dropped" drawn from that suite would
+  be *the same task twice*. Choosing both there would quietly collapse the
+  3-task diversity claim.
+
+### Suite choice — RESOLVED 2026-08-02: `libero_object`, per-suite training
+
+**The three tasks are deliberately still `TBD`.** They get picked from the
+*measured* per-task success rates the gate run produces (see below), not chosen in
+advance. Full reasoning in `DECISIONS.md` 2026-08-02.
+
+**The fact that decided it — DP has no language conditioning**, so a per-suite
+policy can only tell its 10 tasks apart from the image. Verified by diffing
+`(:objects` and `(:fixtures` blocks:
+
+| suite | problem | fixtures | tasks distinguishable from image? | DP |
+|---|---|---|---|---|
+| `libero_object` | **`LIBERO_Floor_Manipulation`** | `floor` | **yes** — different object set per task | **92.5** |
+| `libero_spatial` | `LIBERO_Tabletop_Manipulation` | table, cabinet, stove | partly — two identical black bowls | 78.3 |
+| `libero_goal` | `LIBERO_Tabletop_Manipulation` | table, cabinet, stove, wine rack | **no** — all 10 share one scene and one object set `{bowl, cream cheese, wine bottle, plate}` | 68.3 |
+| `libero_10` | 8 distinct scenes | varies | yes | 50.5 |
+
+**The published ranking is this property, not task difficulty.** And it is
+load-bearing here: the control signal is inter-chunk consistency, so on a
+goal-ambiguous suite the policy is legitimately multimodal *with no disturbance
+present* — inflating nominal inconsistency, inflating the conformal threshold
+calibrated on nominal rollouts, and making disturbance indistinguishable from the
+policy never having known which task it was doing.
+
+**Training recipe matters as much as suite choice.** DP trains **one policy per
+suite** (one set of weights, ~500 demos, all 10 tasks), which is what produced the
+published numbers. The ambiguity confound is a property of *that recipe*, not of
+the tasks — a single-task policy has one goal and no ambiguity, and a hand-picked
+cross-suite trio would be visually disambiguable (Object is a floor scene, the
+others are tabletop). Both alternatives were priced and rejected on budget, not
+correctness; see `DECISIONS.md`.
+
+**Consequence to own out loud:** all 10 `libero_object` tasks are one template, so
+the three tasks are three grocery items, not three skills. **The generality axis is
+PushT vs. LIBERO** — 2D planar pushing, keypoint obs, 2-dim actions versus 7-DoF
+manipulation from 128×128 RGB — not LIBERO task variety.
+
+### Perturbation-harness audit — DONE 2026-08-02. Verdict: build the injector.
+
+Both extensions exist and both perturb **only at episode initialization**.
+Neither injects a disturbance mid-execution, which is this project's entire
+premise, so neither can be adopted as the injector.
+
+| | LIBERO-Plus | LIBERO-PRO |
+|---|---|---|
+| paper | [arXiv 2510.13626](https://arxiv.org/abs/2510.13626) | [arXiv 2510.03827](https://arxiv.org/abs/2510.03827) |
+| code | `github.com/sylvestf/LIBERO-plus` | `github.com/Zijian007/LIBERO-PRO` |
+| dimensions | objects layout, camera viewpoint, robot init state, language, lighting, background texture, sensor noise (7) | manipulated objects, initial states, instructions, environments (4) |
+| scale | 10,030 eval tasks across the 4 suites | — |
+| timing | **initialization only** | **initialization only** |
+
+What the audit actually bought, which is not nothing:
+
+1. **The 2-week Phase-1 compression does not happen.** PLAN §3 Wk 5 assumed a
+   harness might be adoptable. It is not. Budget the injector in full.
+2. **LIBERO-Plus O2 "Target Object Pose"** randomizes the target object's initial
+   (x,y,z) + (pitch,yaw,roll) "by modifying the Problem class interface." That is
+   reusable *code* for computing and applying an object displacement — pair it
+   with `regenerate_obs_from_state()` above to move the displacement mid-episode.
+   O1 adds distractor objects by editing BDDL files; not needed here.
+3. **Neither implements occlusion or delayed observation.** LIBERO-Plus's camera /
+   lighting / texture / sensor-noise axes are appearance perturbations, not
+   occlusion of the target object. Both remain to be built.
+4. **The prior-work distinction gets sharper, with citations.** The two 2025
+   robustness benchmarks perturb the *initial condition* and measure whether the
+   policy still succeeds. This project perturbs *during execution* and measures
+   whether the policy notices in time to change what it commits to. Worth adding
+   to `PLAN.md` §9 as a rebuttal answer.
+
+### Published Diffusion-Policy-on-LIBERO numbers — the Phase-0 gate problem
+
+Searched 2026-08-02. **No released Diffusion Policy LIBERO checkpoint was found**
+in the sources checked (OpenVLA-OFT, LeRobot model hub — which ships
+`lerobot/diffusion_pusht`, `lerobot/pi0_libero_base`, `lerobot/pi05_libero_base`,
+`lerobot/xvla-libero`, but no DP-LIBERO). Treat as "not found," not "proven
+absent" — but plan as if training is required.
+
+The commonly-cited DP baseline is **78.3 / 92.5 / 68.3 / 50.5** (Spatial /
+Object / Goal / Long), reported in
+[OpenVLA-OFT Table I](https://arxiv.org/html/2502.19645v1), attributed there to
+Kim et al., **trained from scratch**. Protocol: **10 tasks × 50 episodes = 500
+trials, reported as a per-suite average.**
+
+**Three reasons the Phase-0 gate is not checkable as written** ("DP reproduces
+published success rates on all three LIBERO tasks"):
+
+1. **No per-task published numbers exist** — only per-suite averages over all 10.
+2. **No released checkpoint** — "reproduce" means *train DP on LIBERO first*.
+3. **A 3-task subset spanning two suites** has no published comparison at all.
+
+**Gate as rewritten 2026-08-02:** train DP on the **`libero_object` suite**,
+evaluate **all 10 tasks × 50 episodes**, and pass if the **suite average is within
+±5 points of 92.5%** — band declared here, before looking, because deciding what
+"close enough" means after seeing the number is how a gate stops being a gate.
+PushT precedent: 0.9453 vs 0.969 published, 0.87 SE, accepted.
+
+Evaluating 10 tasks rather than 3 costs **rollouts only, not extra training** —
+the per-suite policy already covers all 10. And per-task success rates fall out
+for free: 500 Table A rows tagged by task, grouped in post-processing. That
+readout is what picks the three tasks, so **do not name them before this run.**
+
+### First GPU session — measure before training
+
+The two numbers this project's feasibility rests on are both **estimates**:
+~$1.5/hr and ~130 GPU-hr. Neither has been measured. Before committing to a
+training run, time **one rollout and one training epoch**. ~20 minutes, and it
+also settles the `n_envs` question — the CPU measurement favoured small batches
+(1.68×, `SETUP.md` § Step 2) and that very likely reverses on an A10G starved at
+batch 1. Measure; do not infer throughput from CPU%.
 
 ## Backing up raw results
 

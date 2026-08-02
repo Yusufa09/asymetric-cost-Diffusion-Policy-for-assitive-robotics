@@ -10,6 +10,118 @@ if it changes downstream work.
 
 ---
 
+## 2026-08-02 — LIBERO platform is the `libero_object` suite, per-suite training, one run
+
+**What.** The three LIBERO tasks come from **`libero_object`**, trained as a
+**single per-suite policy** (~500 demos, all 10 tasks), one training run. The
+three tasks are **not yet named** — they get picked from the *measured* per-task
+success rates the gate run produces, not chosen in advance. The Phase-0 gate is
+rewritten to: **`libero_object` suite average within ±5 points of the published
+92.5%**, band declared before looking.
+
+This supersedes `PLAN.md` §0 row 1, which named handover, retrieve-dropped-object,
+and drawer/container. **Two of those three tasks do not exist in LIBERO.**
+
+**Why.** Four reasons, in descending weight.
+
+1. **Budget.** ~130 GPU-hr of credit (*estimated*, unmeasured) against `PLAN.md`
+   §10's 350–650, with the Phase-2 grid — the load-bearing risk — drawing on the
+   same pool. One training run is affordable. Two is a bet on an unmeasured
+   number. This is the strongest argument and it outranks the others.
+2. **No goal ambiguity.** DP has no language conditioning. `libero_object`'s 10
+   tasks have **different object sets per task**, so the image identifies the
+   task. `libero_goal`'s 10 tasks share one scene and one object set
+   `{bowl, cream cheese, wine bottle, plate}` and differ only in goal predicate —
+   verified by diffing `(:objects` blocks. **This is the published ranking, not a
+   coincidence:** Object 92.5 > Spatial 78.3 (two identical bowls) > Goal 68.3.
+   It matters here specifically because the control signal is **inter-chunk
+   consistency**: in a goal-ambiguous scene the policy is legitimately multimodal
+   with no disturbance present, which inflates nominal inconsistency, inflates the
+   conformal threshold calibrated on nominal rollouts, and makes disturbance
+   indistinguishable from the policy never having known which task it was doing.
+   The headline would have rested on a signal partly measuring task ambiguity.
+3. **Headroom.** 92.5% nominal means a disturbance dropping success to 60% is
+   unmistakable. At Goal's 68.3% the same effect is noise. The experiment needs
+   room to fall.
+4. **Reproduction is bug insurance.** It is the only apples-to-apples comparison
+   available, and its real value is not judges — it is catching a misconfigured
+   env *before* it is baked into a Phase-2 grid that cannot be re-run after
+   January. Precedent: the PushT checkpoint-config provenance trap
+   (`SETUP.md` § Step 2), where the published YAML and the in-checkpoint config
+   disagreed on the eval seed.
+
+**Rejected alternatives, with the reason:**
+
+- **Custom cross-suite 3-task policy** (~150 demos, one run). Verified viable and
+  *correct*: `libero_object` is `LIBERO_Floor_Manipulation` (fixture `floor`)
+  while Spatial and Goal are `LIBERO_Tabletop_Manipulation` with different
+  fixtures and object sets, so three hand-picked tasks would be visually
+  disambiguable with no confound and real skill diversity. **Rejected on budget
+  and scope, not correctness** — it has no published number by construction, so it
+  buys the diversity story at the cost of the bug insurance, and adding it as a
+  *second* run is scope the schedule can't absorb.
+- **`libero_10` (Long).** Best diversity — 8 distinct scenes, two-step tasks. DP
+  reaches only 50.5%, so there is no headroom to attribute a failure to the
+  injected disturbance rather than to the policy being bad.
+- **Per-task policies** (~50 demos each). No ambiguity anywhere, but ~50 demos is
+  likely data-starved and there is no published comparison.
+
+**Consequences.**
+
+- **The "three diverse tasks" claim is retired.** All three tasks are one template
+  (pick up ⟨grocery⟩ → basket). Say this before a judge does. **The generality
+  axis is PushT vs. LIBERO, not LIBERO task variety** — 2D planar pushing with
+  keypoint obs and a 2-dim action space versus 7-DoF manipulation from 128×128
+  RGB, two independently trained policies. If the ranking flip holds on both, that
+  is stronger than three groceries and a drawer.
+- **Per-task success rates are a free by-product**, not a separate cost. The gate
+  run writes 500 Table A rows tagged by task; grouping by task in post-processing
+  yields all 10 rates at zero extra compute. This is why the three tasks are
+  picked *after* the run.
+- **A second suite stays possible but is not planned.** Its real cost is not
+  training — it is re-running everything downstream: the injector must work in a
+  new scene type, and conformal calibration is per-policy so the Object threshold
+  does not transfer. Revisit only after Phase 1, with a measured GPU-hr figure.
+- `PLAN.md` §0 row 1 and §7's Phase-0 gate row are now stale and updated.
+
+## 2026-08-02 — The disturbance injector gets built; LIBERO-Plus / LIBERO-Pro cannot be adopted
+
+**What.** Neither LIBERO-Plus ([2510.13626](https://arxiv.org/abs/2510.13626)) nor
+LIBERO-PRO ([2510.03827](https://arxiv.org/abs/2510.03827)) is adopted as the
+perturbation harness. `src/disturbances/` is built from scratch, on top of
+LIBERO's own `set_state()` / `regenerate_obs_from_state()`.
+
+**Why.** **Both perturb only at episode initialization.** LIBERO-Plus's seven axes
+(object layout, camera viewpoint, robot init state, language, lighting, background
+texture, sensor noise) and LIBERO-PRO's four are all applied at scene setup,
+before the rollout begins. Neither injects anything *during* execution, which is
+this project's entire premise. Their question is "does the policy still succeed
+from a perturbed start"; ours is "does the policy notice a mid-execution
+disturbance in time to change what it commits to." Different experiments.
+
+Also confirmed: neither implements **occlusion** or **delayed observation**.
+LIBERO-Plus's camera / lighting / texture / sensor-noise axes are appearance
+perturbations, not occlusion of the target object.
+
+**Consequences.**
+
+- **`PLAN.md` §3 Wk 5's ~2-week Phase-1 compression does not happen.** The plan
+  branched on this audit; this is the branch where the injector is worth building.
+  Budget Phase 1 at full size. Combined with Phase 0 becoming a training task,
+  this is ~2–3 weeks of unplanned scope against 2 weeks of Phase-4 buffer.
+- **Partial reuse, not zero.** LIBERO-Plus O2 "Target Object Pose" perturbs target
+  (x,y,z)+(pitch,yaw,roll) via the Problem class — reusable displacement code,
+  repointed at mid-episode via `regenerate_obs_from_state()`. O1 (adding
+  distractor objects by editing BDDL) is not needed.
+- **A sharper prior-work rebuttal, with 2025 citations** — added to `PLAN.md` §9:
+  *"The LIBERO robustness benchmarks perturb the initial condition and ask whether
+  the policy still succeeds. I perturb during execution and ask whether it notices
+  in time to change what it commits to."* This is a better distinction than the
+  one the plan had, and it came free from the audit.
+- **`intermediate_state_ref` is unblocked.** `ControlEnv.get_sim_state()` returns
+  the flattened MuJoCo state — exactly the snapshot the deferred Phase-4 decision
+  specified, at ~KB/step rather than rendered frames.
+
 ## 2026-07-31 — AWS EC2 `g5.2xlarge` is the Phase 0/1 compute platform; credits before cash
 
 **What.** The compute stack, open since the project began, is now partly closed.

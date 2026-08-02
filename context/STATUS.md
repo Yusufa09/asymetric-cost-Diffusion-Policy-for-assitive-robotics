@@ -8,7 +8,7 @@ instant it closes** — not archived here. History lives in `LOG.md` and
 force is closure. Sections are ordered by how often they change, so a routine
 session only rewrites the top.
 
-_Last updated: 2026-07-31_
+_Last updated: 2026-08-02_
 
 ---
 
@@ -23,90 +23,101 @@ _Last updated: 2026-07-31_
 > (experiment freeze). Recompute every session — a stale week number is the
 > cheapest possible way to lose track of the January wall.
 
-**Execution has started. The two-week planning-only streak is broken.** As of
-2026-07-29 the rollout-and-logging pipeline runs end to end and the PushT
-baseline reproduces: `test/mean_score` **0.9453** vs published **0.969** (n=50,
-0.87 se, 95% CI contains the published value). 58 Table A rows exist, archived and
-restore-tested. Diffusion Policy is now vendored into this repo.
+PushT is done and reproduces (`test/mean_score` **0.9453** vs published 0.969,
+n=50, 0.87 se). 58 Table A rows archived and restore-tested. GPU access is live.
+LIBERO is cloned and fully audited **but nothing has run on it.**
 
-**GPU access is live as of 2026-07-30.** Both EC2 quota requests were denied in 48
-minutes and then **approved on appeal**: 8 vCPU on-demand (full ask) and 8 vCPU
-Spot (of 16 asked). That is one `g5.2xlarge` either way in `us-east-1` on account
-`051388699393` — exactly what single-GPU LIBERO work needs. **Nothing now blocks
-LIBERO except doing it.**
+**2026-08-02 closed the two Week-2 carryovers without spending a cent of GPU** —
+LIBERO was audited by reading the repo, no install required. It produced five
+findings, two of which changed the plan (see `LOG.md`), and **the LIBERO platform
+decision is now closed**: `libero_object` suite, per-suite training, one run.
 
-**The Phase-0 gate is half met.** PushT is done. LIBERO is untouched and is now
-the entire critical path.
+**Schedule read — honest version.** One week behind on the LIBERO track, ahead on
+infrastructure. But the week is the small part: this session found **~2–3 weeks of
+scope that was never in the plan** — Phase 0 is a *training* task (no DP-LIBERO
+checkpoint exists) and Phase 1 does *not* compress (no adoptable harness). Against
+2 weeks of designed buffer in Phase 4. **The buffer is now spoken for; treat Phase
+4 as catch-up, not the recoverability stretch.** Front-loading risk before
+Thanksgiving (Wk 19) is now binding, not advisory. Offsetting: **Phase 3 — the
+headline — needs no GPU at all**, so the part most likely to slip is not the
+contribution.
 
-**Next gate: Phase-0 gate, Week 4 (~Aug 13).**
-Pass = DP reproduces published success rates on all three LIBERO tasks. Fail =
-drop to 2 tasks → use released checkpoints → worst case PushT becomes the
-quantitative platform and LIBERO becomes video-only.
+**Next gate: Phase-0 gate, Week 4 (~Aug 13).** Pass = `libero_object` suite
+average within **±5 points of 92.5%** (band declared 2026-08-02, before looking).
+**This date may slip and that is acceptable** — a measured GPU-hr figure is worth
+more than hitting an arbitrary Friday. What must not slip is the gate's *content*.
 
 ## The single next concrete action
 
-**Verify the 3 LIBERO task IDs exist with the right observation/action space, and
-audit LIBERO-Plus / LIBERO-Pro for existing perturbation harnesses.** Budget 90
-minutes for the audit — `PLAN.md` calls it the highest-leverage 90 minutes in the
-schedule, and 2026-07-29 made that sharper: **PushT turned out to already ship
-two of the three disturbances** (see Queued below), so the odds that LIBERO does
-too are better than assumed. If either repo implements object shift or occlusion,
-Phase 1 compresses by ~2 weeks and you inherit a standard others recognize.
+**Configure Budgets alarms on credit balance (~10 min), then launch and
+measure — do not start a training run first.**
 
-**No GPU needed for this, so it does not wait on the Budgets alarms** — do the
-audit first, set the alarms, then launch. Doing it in that order avoids paying for
-GPU time while reading repos.
+The first GPU session's job is **one rollout timed and one training epoch timed**,
+~20 minutes. This replaces the two estimates the entire feasibility argument rests
+on (~$1.5/hr, ~130 GPU-hr), and settles the `n_envs`-on-GPU question. Committing
+to a full training run before knowing what a run costs is how the credit gets
+spent on the wrong thing.
 
-Do this *before* downloading anything large — see the disk warning below.
+Order: alarms → launch → install LIBERO env → pull `libero_object` **only** →
+measure → then train.
 
 ## Blocked / at risk
 
-- **LIBERO reproduction is now the whole critical path.** PushT no longer buys any
-  information about it: different stack, different conda env, needs a GPU. If
-  LIBERO checkpoints don't reproduce, everything downstream compresses against the
-  Thanksgiving and January walls.
 - **⚠ Budgets alarms are still not configured, and the AWS appeal text says they
   are.** Both submitted appeals assert *"I have Budgets alarms set on the credit
   balance"* as part of the risk argument that won the quota. They are not set.
-  This is a **hard gate on launching any instance** — one `g5.2xlarge` left
-  running drains $200 in under six days, and that credit is now the binding
-  constraint on the whole phase. ~10 minutes to close. Alarm on credit *balance*,
-  not just spend.
-- **⚠ Disk: 31 GB free, and the LIBERO demo datasets total ~100 GB.** Do **not**
-  run `download_libero_datasets.py` without `--datasets`. You need at most
-  `libero_object` and `libero_goal` (est. ~15–20 GB, per-suite sizes unverified),
-  and arguably only 3 individual task HDF5 files. **Demo data belongs on the GPU
-  instance, not this laptop** — it is training data and training is cloud work.
-  Locally you need only the LIBERO code and sim assets.
+  **Hard gate on launching any instance** — one `g5.2xlarge` left running drains
+  $200 in under six days. ~10 minutes to close. Alarm on credit *balance*, not
+  just spend. **Carried unmet since 2026-07-31.**
+- **Phase 0 is now a training task, not a download-and-evaluate task.** No released
+  DP-on-LIBERO checkpoint was found (searched OpenVLA-OFT and the LeRobot hub,
+  2026-08-02). Scope as *not found*, not *proven absent*. This is the single
+  largest unplanned scope increase in the project so far.
+- **The fallback ladder's middle rung is broken.** `PLAN.md` §7 says "use released
+  checkpoints" if the gate fails. There are none for DP. Nearest substitute is
+  `lerobot/pi0_libero_base` — a released flow-matching VLA with LIBERO weights,
+  which keeps the chunked-horizon mechanism at zero training cost but changes the
+  policy from DP to π0. **Unverified**: neither the checkpoint nor whether
+  inter-chunk consistency behaves the same on a flow-matching model. Investigate
+  only if the gate is actually failing; do not switch preemptively.
 - **Credits do not cover the project.** ~130 GPU-hr (at the *estimated* ~$1.5/hr)
-  against `PLAN.md` §10's 350–650 GPU-hr estimate. Funds Phase 0 and probably
-  Phase 1, not the Phase-2 grid. Accounts 2 and 3 are now a planned step, and each
-  repeats the ~2-day quota appeal — do not assume same-day GPU on a new account.
-- **Schedule: Week 3 as of 2026-07-31, and Week 2's three LIBERO items are still
-  unstarted.** They are no longer blocked on anything. The Phase-0 gate is Week 4
-  (~Aug 13).
+  against `PLAN.md` §10's 350–650 GPU-hr. Funds Phase 0 and probably Phase 1, not
+  the Phase-2 grid. Accounts 2 and 3 are a planned step, each repeating the ~2-day
+  quota appeal. **Both numbers in this bullet are estimates** — the measurement
+  above is what replaces them.
+- **⚠ Disk on the instance, not the laptop.** Laptop is fine: LIBERO code is 650 MB
+  and 28 GB is free. **The `libero_object` demo HDF5 size is unverified** — do
+  **not** run `download_libero_datasets.py` bare; pass `--datasets libero_object`.
+  Demo data belongs on the instance.
 
 ## Open decisions — mine to make
 
-- **Compute stack — closed for Phases 0–1, still open for Phase 2.** EC2
-  `g5.2xlarge` on account `051388699393` ($200 credit, confirmed resident) runs
-  Phase 0 and Phase 1. RunPod and Vast are held in reserve for the Phase-2 grid
-  and are *not* rejected; Kaggle and Colab are out; SageMaker is unchosen. The
-  open question is only **what funds Phase 2** — accounts 2 and 3 ($600 max) or
-  cash on RunPod. Reasoning in `DECISIONS.md` 2026-07-31: credit beats cheap cash
-  because the payment methods belong to other people. **Decide once Phase 1
-  supplies a measured GPU-hr figure**, which replaces the load-bearing estimate.
+- **The three `libero_object` task IDs — deliberately deferred, not unknown.**
+  They get picked from the *measured* per-task success rates the gate run produces
+  (500 Table A rows tagged by task; grouping by task is free post-processing).
+  Picking them in advance would mean guessing from grasp geometry. **Do not name
+  them before the gate run.**
+- **Phase-2 compute funding.** EC2 `g5.2xlarge` on `051388699393` runs Phases 0–1.
+  Open question is only what funds the Phase-2 grid — accounts 2 and 3 ($600 max)
+  or cash on RunPod. RunPod and Vast are held in reserve, not rejected. **Decide
+  once the measurement above supplies a real GPU-hr figure.**
+- **Whether to train a second LIBERO suite at all.** Structurally possible; not
+  planned. The real cost is not training — the injector must work in a new scene
+  type, and conformal calibration is per-policy so the Object threshold does not
+  transfer. **Revisit after the Phase-1 gate (Wk 10), with measured costs.** Note
+  that neither candidate is good: `libero_10` has no headroom (50.5% nominal),
+  `libero_goal` carries the ambiguity confound.
 - **Tier-2 backup destination.** Must **not** be colocated with compute — the AWS
   accounts auto-close and would take their S3 buckets with them. Leading candidate
-  is Google Drive. **Not yet urgent:** no `intermediate_state_ref` blobs exist, so
-  nothing is currently at risk. **Must close before the first run that writes them.**
+  is Google Drive. **Not yet urgent:** no `intermediate_state_ref` blobs exist.
+  **Must close before the first run that writes them** — which is now closer,
+  since `ControlEnv.get_sim_state()` makes them cheap to write.
 - **Competition venue — ScienceMontgomery vs. PG County.** PG County may be an
   easier ISEF path. Changes nothing about the project or schedule, but the two have
-  different registration and abstract deadlines. Low urgency; ScienceMontgomery
-  registration isn't open yet anyway.
+  different registration and abstract deadlines. Low urgency.
 - **No rebuttal drafted for VLA-Corrector (2607.01804).** The lit review calls it
-  the nearest neighbor — detect-and-correct → event-triggered adaptive horizon, on
-  VLAs. `PLAN.md` §9 has answers for DVAC/DEHP/AutoHorizon/Rewind-IL/AEGIS but not
+  the nearest neighbor. `PLAN.md` §9 now has answers for DVAC/DEHP/AutoHorizon/
+  Rewind-IL/AEGIS/LIBERO-Plus/LIBERO-PRO and the three-tasks critique, but not
   this one. Needs one before any mentor conversation. Pure reading and writing —
   good filler for a session where you don't want to fight dependencies.
 
@@ -126,40 +137,42 @@ Parked deliberately, with the reason and when it comes back. Not forgotten.
 
 - **Success-threshold sensitivity sweep.** PushT success is `coverage ≥ 0.95`,
   inherited from IBC, not chosen — and 17 of 50 episodes sit in [0.9, 1.0), just
-  under it. Since `success_flag` feeds the cost model, the flip figure could be
-  sensitive to a constant nobody defends. `max_reward` is logged as a float so
-  every threshold stays recomputable. **Returns: Phase 3**, run alongside the
-  cost-ratio sweep — same analysis shape, same figure logic. See `DECISIONS.md`.
-- **Seeding the policy's sampling RNG.** DDPM sampling noise is currently unseeded,
-  so repeat runs are not bit-identical. Fine for a 50-episode mean; not fine for
-  debugging a single trajectory. **Returns: whenever a single-trajectory bug needs
-  reproducing**, or Phase 2 if per-seed determinism is wanted in the grid.
-- **`intermediate_state_ref` should point to a MuJoCo sim-state snapshot, not
-  rendered frames.** ~KB/step (~1 GB per thousand episodes) vs. ~100× for frames.
-  Recorded in `SETUP.md`; implement when the logger grows Table B. **Returns: Wk 7.**
+  under it. `max_reward` is logged as a float so every threshold stays
+  recomputable. **Returns: Phase 3**, alongside the cost-ratio sweep.
+- **Seeding the policy's sampling RNG.** DDPM sampling noise is unseeded, so repeat
+  runs are not bit-identical. Fine for a 50-episode mean; not fine for debugging a
+  single trajectory. **Returns: whenever a single-trajectory bug needs reproducing**,
+  or Phase 2 if per-seed determinism is wanted in the grid.
+- **`intermediate_state_ref` → MuJoCo sim-state snapshot, not rendered frames.**
+  ~KB/step vs ~100× for frames. **Now unblocked on the LIBERO side** —
+  `ControlEnv.get_sim_state()` (`envs/env_wrapper.py:118`) returns exactly this.
+  **Returns: Wk 7**, when the logger grows Table B.
 - **Recoverability definitions.** `recoverable_at_detection_flag` and
   `ground_truth_failure_step` need real definitions of "recoverable" and
-  "irreversible" — a research task, not a log write. **Returns: Phase 4.**
+  "irreversible" — a research task, not a log write. **Returns: Phase 4** — but see
+  the buffer warning above; Phase 4 is now catch-up.
 - **Cost model values.** Sweep bounds, latency-weighting, whether TP carries a
-  replan cost. Structure is locked; values iterate against real detection-latency
+  replan cost. Structure locked; values iterate against real detection-latency
   distributions. **Returns: Phase 3.**
 - **Second detector signal** (chunk magnitude, ActProbe-style). Only if inter-chunk
-  consistency separates weakly. Otherwise bank the time. **Returns: Week 9.**
-- **Optimal `n_envs` on GPU.** Measured on CPU: small `n_envs` wins ~1.68× (25.5%
-  straggler waste × 1.25× batch inefficiency). **This very likely reverses on GPU**,
-  which is starved at batch 1. Measure, don't assume — and never infer throughput
-  from CPU%. **Returns: first LIBERO GPU run.**
-- **Sponsor outreach.** Pitch idea + preliminary result, not a cold ask. **A
-  reproduced baseline now exists**, so this is unblocked. Target postdocs / senior
-  PhD students. **Returns: Week 4+.**
+  consistency separates weakly. **Returns: Week 9.**
+- **Optimal `n_envs` on GPU.** CPU measurement favours small `n_envs` by ~1.68×
+  (25.5% straggler waste × 1.25× batch inefficiency). **This very likely reverses
+  on an A10G starved at batch 1.** Measure, don't assume; never infer throughput
+  from CPU%. **Returns: first LIBERO GPU run — i.e. the next one.**
+- **Custom cross-suite 3-task policy.** Verified *correct* on 2026-08-02 —
+  `libero_object` is a floor scene, Spatial/Goal are tabletop with different
+  fixtures, so three hand-picked tasks would be visually disambiguable with real
+  skill diversity and no confound. **Rejected on budget and scope, not
+  correctness.** **Returns: only if the Object suite gate fails** and a
+  cheaper-than-a-second-suite option is wanted.
+- **Sponsor outreach.** Pitch idea + preliminary result, not a cold ask. A
+  reproduced baseline exists, so this is unblocked. Target postdocs / senior PhD
+  students. **Returns: Week 4+.**
 - **The remaining 8 vCPU of Spot quota.** AWS granted 8 of 16 and routed the rest
-  to **AWS Sales** (`aws.amazon.com/contact-us/aws-sales/`), not support. Skipped
-  deliberately: it only buys checkpoint-resume handoff across a Spot reclaim, and
-  Sales conversations orbit spend commitments — poor value on a credit-funded
-  account. **Returns: only if the Phase-2 grid actually needs concurrency.** If
-  contacted, give the real January 2027 timeline — the approving agent's reply
-  cited a "mid-September launch" that appears nowhere in either case and looks
-  like a crossed wire with another ticket.
+  to **AWS Sales**, not support. Skipped deliberately: it only buys checkpoint-
+  resume handoff across a Spot reclaim. **Returns: only if the Phase-2 grid
+  actually needs concurrency.** If contacted, give the real January 2027 timeline.
 - **Drive copies not yet retired.** Repo is the source of truth; delete or mark the
   Drive versions read-only before they drift. **Returns: whenever, but soon.**
 
@@ -167,89 +180,101 @@ Parked deliberately, with the reason and when it comes back. Not forgotten.
 
 Easy to skip, costly to skip.
 
-- **Never edit `external/diffusion_policy/`.** It is vendored unmodified at
-  `5ba07ac`. Wrap or subclass from `src/` instead. An edit there is invisible in
-  review and voids the unmodified-upstream guarantee.
+- **Never edit `external/diffusion_policy/`.** Vendored unmodified at `5ba07ac`.
+  Wrap or subclass from `src/` instead.
+- **Same for `external/LIBERO/`** — cloned at `8f1084e`, gitignored, not vendored.
+  If it is ever vendored, delete its `.git` first and vendor the **code only**;
+  a blanket un-ignore would try to commit ~100 GB of demo data.
 - **Wrap long local runs in `caffeinate -is`.** The machine slept mid-rollout on
-  2026-07-29. Nothing is written until a run completes, so a sleep that becomes a
-  shutdown loses everything.
+  2026-07-29. Nothing is written until a run completes.
 - **Earmark compute for the Phase-2 controls now** (~30 cells). The failure mode is
-  reaching January having spent the budget on extra seeds.
+  reaching January having spent the budget on extra seeds. **Now sharper — the
+  Phase-4 buffer is already spoken for.**
 - **Re-verify the literature at each phase gate** (~20 min × 5). Several key papers
-  post-date model training cutoffs and the adaptive-horizon space moves fast.
-- **Instrument from day one.** Every rollout emits schema rows. Honored so far:
-  both runs this session wrote Table A rows.
+  post-date model training cutoffs. Confirmed useful: the 2026-08-02 audit found
+  two 2025 benchmarks that produced a better prior-work rebuttal than the plan had.
+- **Instrument from day one.** Every rollout emits schema rows — including the
+  LIBERO measurement run and the gate run.
 - **Back up raw rows before the next run starts**, gzipped to `logs/archive/` with
   a MANIFEST line. Done 2026-07-29 and restore-tested.
-- **Budget alarms before launching any GPU instance.** Payment methods belong to
-  other people; a forgotten instance drains $200 in under six days. Alarm on credit
-  *balance*, not just spend. **Currently unmet — see Blocked.**
+- **Budget alarms before launching any GPU instance.** **Currently unmet — see
+  Blocked.**
 - **AWS mail lives on `free.yusuf999@gmail.com`, not the primary Gmail.** Account
   `051388699393`. The Gmail MCP is bound to `yusufaae09@gmail.com` and returns
-  *empty* for AWS queries, which reads as "no reply yet" rather than "wrong
-  inbox." Cost 20 min on 2026-07-31. Use Apple Mail for anything AWS.
+  *empty* for AWS queries, which reads as "no reply yet" rather than "wrong inbox."
+  Cost 20 min on 2026-07-31. Use Apple Mail for anything AWS.
+- **Declare tolerance bands before looking at a number.** Phase-0 band is ±5 points
+  on the `libero_object` suite average. Deciding "close enough" after seeing the
+  result is how a gate stops being a gate.
 
 ## Checklists
 
-**AWS — verification owed (all cheap, none blocking)**
+**AWS — verification owed**
 
+- [ ] **Configure Budgets alarms on credit balance** — blocking, see Blocked
+- [ ] Verify the true `g5.2xlarge` $/hr off Cost Explorer once real hours exist.
+      The ~$1.5/hr figure is an *estimate* and it is load-bearing.
 - [ ] Check whether the SageMaker `ml.g5.2xlarge` cap can be raised **above 1**,
       and whether the instant self-service grant covers *training job* /
-      *processing job* / *spot training job* usage types or only notebook/Studio.
-      Query in `SETUP.md` § Quotas.
-- [ ] Verify the true `g5.2xlarge` $/hr off Cost Explorer once real hours exist.
-      The ~$1.5/hr figure is an *estimate* and it is load-bearing — it is what
-      turns $200 into "~130 GPU-hr" and therefore what says one account is not
-      enough.
-- [ ] **Configure Budgets alarms on credit balance** — blocking, see Blocked.
-- [x] EC2 G/VT quota granted and verified in the Service Quotas console —
-      8 vCPU on-demand + 8 vCPU Spot, `us-east-1`, account `051388699393`
+      *processing job* / *spot training job* usage types. Query in `SETUP.md`
+      § Quotas. (Low priority — EC2 is the chosen platform.)
+- [x] EC2 G/VT quota granted and verified — 8 vCPU on-demand + 8 vCPU Spot,
+      `us-east-1`, account `051388699393`
 - [x] $200 credit confirmed resident on `051388699393`
 
-**Week 3 — due now (all three carried from Week 2, no longer blocked)**
+**Week 3 — status**
 
-- [ ] Verify the 3 LIBERO task IDs
-- [ ] Audit LIBERO-Plus / LIBERO-Pro for existing perturbation harnesses (90 min)
-- [ ] Reproduce DP on one LIBERO task; confirm success rate near published —
-      **needs Budgets alarms first**
-- [x] Install Diffusion Policy; PushT running on CPU end-to-end — `robodiff` env,
-      procedure in `SETUP.md` § Step 1
-- [x] Evaluate a released low-dim PushT checkpoint; emit Table A rows — run
-      `20260729T005212Z`, `test/mean_score` 0.9453 vs published 0.969, 56 rows
-- [x] Logging schema live (was queued for Wk 3; done early per
-      instrument-from-day-one) — `src/logging/rows.py`, 58 rows in
-      `logs/archive/table_a_20260729.jsonl.gz`
-- [x] Backup + restore test — `logs/archive/MANIFEST.md`, verified byte-identical
-- [x] EC2 GPU quota won on appeal — procedure recorded in `SETUP.md` § Quotas
+- [x] LIBERO cloned, code only — `8f1084e`, 650 MB, `external/LIBERO`
+- [x] Observation/action space verified from source — 7-dim `OSC_POSE`, dual
+      128×128 RGB + 9-dim proprio. `SETUP.md` § Step 4
+- [x] Suites enumerated with canonical indices; the three planned framings shown
+      not to exist in LIBERO — `SETUP.md` § Step 4, `DECISIONS.md` 2026-08-02
+- [x] LIBERO-Plus / LIBERO-PRO audit (90 min) — both initialization-only, injector
+      must be built. `DECISIONS.md` 2026-08-02
+- [x] Suite decision closed — `libero_object`, per-suite training
+- [x] Phase-0 gate criterion rewritten and band declared — `PLAN.md` §7
+- [ ] **Budgets alarms** — blocking everything below
+- [ ] Launch `g5.2xlarge`; install the LIBERO conda env; record what actually
+      worked in `SETUP.md`
+- [ ] Pull `libero_object` demos **only** (`--datasets libero_object`); record the
+      real size
+- [ ] **Time one rollout + one training epoch** before training anything
+- [ ] Train DP on `libero_object`
 
 **Queued**
 
-- [ ] Wk 4: Phase-0 gate — verify DP on all 3 LIBERO tasks, snapshot reproducible
-      baseline
-- [ ] Wk 4: at the phase gate, update `PLAN.md` §10 — its "no provider has been
-      chosen" caveat is **now stale for Phases 0–1** (EC2 `g5.2xlarge` chosen
-      2026-07-31). It remains accurate for the Phase-2 grid only.
-- [ ] Wk 5: object-shift injector. **Only object-shift needs building** — PushT
-      already ships `keypoint_visible_rate` (occlusion) and `n_latency_steps`
-      (delayed observation). Caveat: visibility resamples every step rather than
-      persistently occluding a region, and neither has a clean LIBERO analogue, so
-      these are dev proxies, not the real injector.
+- [ ] Wk 4: Phase-0 gate — `libero_object` suite average within ±5 of 92.5%;
+      snapshot reproducible baseline; **read off per-task rates and pick the three
+      tasks**
+- [ ] Wk 4: create `context/RESULTS.md` when the first LIBERO number lands
+- [ ] Wk 5: object-shift injector — **full build, not integration.** On PushT,
+      only object-shift needs building: `keypoint_visible_rate` (occlusion) and
+      `n_latency_steps` (delayed observation) already ship. Caveat: visibility
+      resamples every step rather than persistently occluding a region, and
+      neither has a clean LIBERO analogue, so these are dev proxies. On LIBERO,
+      all three need building — start from `set_state()` /
+      `regenerate_obs_from_state()`.
 
 ## Recent decisions
 
 Full archive with reasoning in `DECISIONS.md`.
 
+- **2026-08-02** — LIBERO platform is the `libero_object` suite, per-suite
+  training, one run; the three tasks are picked from measured per-task rates at
+  the gate, not named in advance. Decided on budget first, then on the fact that
+  `libero_goal`'s ten tasks share one scene and one object set, which would have
+  contaminated an inter-chunk-consistency detector with the policy's own
+  goal ambiguity.
+- **2026-08-02** — The disturbance injector gets built from scratch. LIBERO-Plus
+  and LIBERO-PRO both perturb at episode initialization only; neither matches a
+  mid-execution disturbance experiment. Phase 1 does not compress.
 - **2026-07-31** — EC2 `g5.2xlarge` is the Phase 0/1 compute platform; credits are
   spent before cash, because the AWS $200 is credit and RunPod is cash that
   belongs to someone else. Phase-2 funding still open.
 - **2026-07-29** — Diffusion Policy vendored into this repo (369 files, MIT,
-  unmodified at `5ba07ac`) rather than pinned by hash; `.gitignore` uses per-repo
-  opt-in so LIBERO's ~100 GB can never be swept in by a blanket rule.
+  unmodified at `5ba07ac`); `.gitignore` uses per-repo opt-in.
 - **2026-07-29** — PushT `success_flag` = `max_reward >= 1.0` (coverage ≥ 95%),
   with the continuous score logged alongside it.
-- **2026-07-28** — *No decision.* A SageMaker entry was drafted and removed before
-  commit; availability was confirmed, nothing was chosen.
-- **2026-07-27** — Repo is the single source of truth; Drive copies retired.
 - **2026-07-26** — Logging schema locked as a superset with a `[live]`/`[derived]`
   split; append-only JSONL/CSV as source of truth.
 - **2026-07-26** — Cost model *structure* locked (swept ratio, 1×–1000× log-spaced,

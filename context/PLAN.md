@@ -3,9 +3,14 @@
 **Disturbance-Robust Adaptive Execution Horizon, Evaluated Under Assistive
 Asymmetric Cost.** Revision v2, post-literature-review. Changelog vs. v1 in §11.
 
-> **Update trigger:** phase gates only (~5× total) — see `MAINTENANCE.md`. Two
-> caveats flagged inline: §6 is superseded by `SPEC.md`, and §10's AWS-first
-> wording is v1 drafting, not a decision — no compute provider has been chosen.
+> **Update trigger:** phase gates only (~5× total) — see `MAINTENANCE.md`. One
+> caveat flagged inline: §6 is superseded by `SPEC.md`.
+>
+> **Off-cycle edit 2026-08-02**, made because §0 row 1 and §7's Phase-0 row were
+> **factually false**, not merely stale: they named two LIBERO tasks that do not
+> exist and a gate that cannot be evaluated. §3 Wk 5, §9 and §10 updated in the
+> same pass. Sections touched: §0, §3, §7, §9, §10. **Schedule (§2) unchanged** —
+> see `STATUS.md` for the Week-3 slippage read.
 
 Target: ScienceMontgomery (Computer Science) → ISEF qualification. Bar to clear:
 ScoutCane (ROBO042). Window: ~28 weeks. Start mid-July 2026 → experiments frozen
@@ -20,7 +25,7 @@ training).
 
 | # | Decision | Locked choice |
 |---|---|---|
-| 1 | Tasks (LIBERO) | 3 assistive-flavored tasks: object handover, retrieve-dropped-object, container/drawer opening. Exact task IDs verified Week 2 (LIBERO-Object for pick-place framings; LIBERO-Goal contains drawer/cabinet and placement goals). |
+| 1 | Tasks (LIBERO) | **Revised 2026-08-02.** ~~3 assistive-flavored tasks: object handover, retrieve-dropped-object, container/drawer opening.~~ **Handover and retrieve-dropped-object do not exist in LIBERO** — verified against the BDDL files. Platform is the **`libero_object` suite**, per-suite training, one run; the 3 tasks are picked from *measured* per-task success rates at the Phase-0 gate, not named in advance. `DECISIONS.md` 2026-08-02. |
 | 2 | Disturbances | object shift (headline + live demo), occlusion, delayed observation. Object-swap dropped. |
 | 3 | Control signal | Inter-chunk consistency (STAC/TIDE-style: compare the newly generated chunk against the previously committed one over their temporal overlap). Single-inference, near-free. Conformal-calibrated threshold. |
 | 3b | Demo signal | K-sample dispersion — used only for the live PushT confidence meter, where compute is irrelevant and intuitive explanation matters. Not the control signal. |
@@ -82,7 +87,7 @@ Capacity dips: Thanksgiving (Wk 19), winter break (Wk 23–24), January assessme
 
 ### Phase 1 — Disturbances + detector (Wk 5–10)
 
-- **Wk 5:** Object-shift injector (headline), parameterized by magnitude × onset step. PushT first, then LIBERO. (If the Wk-2 audit found a harness, this is mostly integration.)
+- **Wk 5:** Object-shift injector (headline), parameterized by magnitude × onset step. PushT first, then LIBERO. **The Wk-2 audit ran 2026-08-02 and found no adoptable harness** — LIBERO-Plus and LIBERO-PRO both perturb at episode initialization only, so this is a full build, not integration. Budget accordingly. Build on LIBERO's `set_state()` / `regenerate_obs_from_state()`; LIBERO-Plus's O2 target-pose code is reusable for computing the displacement.
 - **Wk 6:** Add occlusion and delayed observation. Confirm each degrades success monotonically with magnitude — this sanity check is itself a result.
 - **Wk 7:** Implement the inter-chunk consistency signal. One extra forward pass at decision points only. Log raw signal every step. (Also implement K-sample dispersion for the demo meter — PushT only.) **Normalize action dimensions using the policy's own action normalization before measuring any spread or chunk-to-chunk distance** — raw action dims have different scales (gripper bit vs. large translation), so an unnormalized signal is dominated by whichever dimension has the biggest raw units and the number means nothing. Cheap to get right now, invisible and expensive later.
 - **Wk 8:** Split-conformal calibration on nominal rollouts for a target false-alarm rate. Evaluate detector offline: AUROC (gate) + detection latency (result).
@@ -184,7 +189,7 @@ re-running the grid. `total_replans` is what the controls match against.
 
 | Gate | Pass condition | If it fails |
 |---|---|---|
-| Phase 0 (Wk 4) | DP reproduces published success on 3 tasks | Drop to 2 tasks; use released checkpoints; worst case PushT becomes the quantitative platform and LIBERO becomes video-only |
+| Phase 0 (Wk 4) | **Revised 2026-08-02:** `libero_object` **suite average** (10 tasks × 50 eps) within **±5 points of the published 92.5%**, band declared before looking. ~~DP reproduces published success on 3 tasks~~ — not checkable: published numbers are per-suite averages, no per-task numbers exist, and **no released DP-on-LIBERO checkpoint was found**, so "reproduce" means train first | Drop to 2 tasks; ~~use released checkpoints~~ **that rung is broken — no DP-LIBERO checkpoint exists.** Nearest substitute is a released flow-matching VLA with LIBERO weights (`lerobot/pi0_libero_base`), which preserves the chunked-horizon mechanism at zero training cost but changes the policy from DP to π0 — unverified, investigate only if the gate is failing. Worst case PushT becomes the quantitative platform and LIBERO becomes video-only |
 | Phase 1 (Wk 10) | Signal separates disturbed vs. nominal (AUROC clearly > chance); detection latency < time-to-failure on most episodes | Add chunk-magnitude second signal; if still weak, own it as the headline caveat and lean on the compute-savings floor (which doesn't need a great detector) |
 | Phase 2 (Wk 16) | Adaptive matches always-replan at fewer passes and beats both controls at matched budget | If it ties the controls, report that honestly — it's a real finding. If the floor itself breaks, pivot framing to the measurement result (best detector ≠ best trigger) or the disturbance benchmark; the logged data supports both |
 | Phase 3 (Wk 22) | Ranking flips across a plausible cost-ratio range | Report honestly that asymmetric cost preserves the ranking here — still a real measurement. Low risk: it's post-processing |
@@ -209,6 +214,8 @@ result away from having no project.**
 - **"Isn't this AEGIS?"** → "AEGIS escalates to a stronger policy. I don't add a second policy — I change how far ahead the same policy commits."
 - **"Why believe the win isn't just compute?"** → Figure 3. Budget-matched control and random placebo. *(Have the numbers memorized.)*
 - **"Why is your detector better than Sentinel/ActProbe?"** → "It isn't necessarily — that's the point. I'm not claiming a better detector; I'm claiming the evaluation everyone uses ranks them wrong for deployment."
+- **"Isn't this LIBERO-Plus / LIBERO-PRO?"** *(added 2026-08-02, from the audit)* → "Those perturb the **initial condition** and ask whether the policy still succeeds from a perturbed start. I perturb **during execution** and ask whether the policy notices in time to change what it commits to. Theirs is a robustness benchmark; mine is a detection-and-recovery experiment." Verified: all seven LIBERO-Plus axes and all four LIBERO-PRO axes are applied at scene setup, before rollout.
+- **"Only three tasks, and they're all pick-and-place?"** *(own this first)* → "Correct — all three are `libero_object` grocery items, and task variety is not my generality axis. My generality axis is **PushT vs. LIBERO**: 2D planar pushing with keypoint observations and a 2-dim action space, versus 7-DoF manipulation from 128×128 RGB, two independently trained policies. The ranking flip holding across both is a stronger claim than three LIBERO tasks would be."
 
 Papers to know cold: see `LITERATURE.md`.
 
@@ -216,7 +223,8 @@ Papers to know cold: see `LITERATURE.md`.
 
 - **Sponsor/mentor:** start outreach Wk 4+, once you have a reproduced baseline. Pitch idea + preliminary result, not a cold ask. Target postdocs / senior PhD students.
 - **Compute:** training light (~150–250 GPU-hrs); rollouts are the sink (~200–400 GPU-hrs), now including ~20% for the controls. Likely near the low end of $400–600, possibly $0. Prototype on PushT (CPU) before touching LIBERO GPUs. Spot + checkpointing is the ~70% lever.
-  > **Provider undecided.** This section's original AWS-first wording reflects v1 drafting, not a decision. No compute provider has been chosen — see the open question in `STATUS.md`.
+  > **Provider — resolved for Phases 0–1 on 2026-07-31.** EC2 `g5.2xlarge` in `us-east-1`, account `051388699393`, $200 credit. **Still open for the Phase-2 grid.** The "no compute provider has been chosen" wording that stood here was v1 drafting and is stale.
+  > **The GPU-hr numbers in this section are estimates and have never been measured.** ~$1.5/hr and the 350–650 GPU-hr range are both load-bearing — they are what says one account is not enough. First GPU session must time one rollout and one training epoch before anything else.
 - **Registration:** confirm ScienceMontgomery 2027 dates and the abstract/registration deadline early — paperwork lands weeks before the fair.
 
 ## 11. Changelog vs. v1
