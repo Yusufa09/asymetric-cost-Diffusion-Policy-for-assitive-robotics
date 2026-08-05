@@ -500,6 +500,165 @@ also settles the `n_envs` question — the CPU measurement favoured small batche
 (1.68×, `SETUP.md` § Step 2) and that very likely reverses on an A10G starved at
 batch 1. Measure; do not infer throughput from CPU%.
 
+## Step 5 — EC2 instance + LIBERO env — EXECUTED 2026-08-04, WORKS
+
+**Status: verified working end to end.** A LIBERO env builds, resets, renders two
+128×128 RGB streams, and steps a 7-dim action on the GPU. Commands below are the
+ones that *actually ran*, including three workarounds the README does not mention.
+
+### The instance
+
+| | |
+|---|---|
+| type | `g5.2xlarge`, `us-east-1` |
+| AMI | `ami-04496a4d4cc3ce989` — *Deep Learning Base AMI with Single CUDA (Ubuntu 24.04)* |
+| GPU | **NVIDIA A10G, 23028 MiB**, driver `595.71.05` |
+| CUDA (system) | 13.2 — **irrelevant**, pip's torch bundles its own runtime; only the driver version matters |
+| OS / user | Ubuntu 24.04.4 LTS / `ubuntu` |
+| root volume | 100 GiB gp3 → 96 G usable, 18 G used by the AMI, **78 G free** |
+| instance store | `nvme1n1`, **419 G**, unmounted, **free** — ephemeral scratch, wiped on stop |
+
+**AMI trap.** Searching "Deep Learning Base OSS" in the console lands you in
+**AWS Marketplace AMIs**, which returns third-party repackages (e.g. "Galaxys
+Cloud") carrying a **software surcharge of $2.40–3.20/hr on top of EC2**. That
+would roughly triple the burn rate. Official AWS images are owned by `amazon`
+and have **no software cost line**. Verify owner and price before selecting.
+
+**Free-tier trap.** The post-2025-07 AWS **Free Plan blocks GPU instance types
+entirely** — `g5.2xlarge` is not launchable on it. Upgrading to the Paid Plan is
+required, credits carry over to their original expiry, and credits are consumed
+before the card. **But the Free Plan's auto-close-on-credit-depletion is what
+made overspend structurally impossible; upgrading removes that.** A Budgets
+*Action* that auto-stops EC2 is the only guard that enforces rather than notifies.
+
+### Install — the commands that worked
+
+```bash
+# 1. miniconda (not preinstalled on this AMI)
+curl -fsSL -o mc.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash mc.sh -b -p $HOME/miniconda3 && $HOME/miniconda3/bin/conda init bash
+
+# 2. env — NOTE the channel override, see workaround 1
+conda create -n libero python=3.8.13 -y -c conda-forge --override-channels
+
+# 3. LIBERO at the pinned commit
+git clone https://github.com/Lifelong-Robot-Learning/LIBERO.git ~/LIBERO
+cd ~/LIBERO && git checkout 8f1084e3132a39270c3a13ebe37270a43ece2a01
+
+# 4. deps  (writes ~/.libero/config.yaml FIRST — see workaround 2)
+~/miniconda3/envs/libero/bin/pip install -r requirements.txt
+~/miniconda3/envs/libero/bin/pip install -e .
+```
+
+Clone is **743 MB** on Linux (vs 650 MB on macOS — filesystem block size).
+
+### Three workarounds the README does not mention
+
+1. **Anaconda ToS blocks `conda create`.** The default channels
+   (`repo.anaconda.com/pkgs/main`) now require accepting a Terms of Service
+   agreement, and `conda create` fails with a ToS error until you do. **Fixed
+   with `-c conda-forge --override-channels`** — no agreement to accept, and
+   conda-forge carries no commercial-use restriction. Preferred over
+   `conda tos accept` on both legal and reproducibility grounds.
+
+2. **⚠ LIBERO calls `input()` on first import and will HANG.**
+   `libero/libero/__init__.py:71` prompts *"Do you want to specify a custom path
+   for the dataset folder? (Y/N)"* when `~/.libero/config.yaml` is absent. Over a
+   non-interactive SSH session this hangs with no output and no error — it looks
+   like a crash, not a prompt. **Pre-write the config so the branch never runs:**
+
+   ```bash
+   mkdir -p ~/.libero && cat > ~/.libero/config.yaml <<EOF
+   benchmark_root: /home/ubuntu/LIBERO/libero/libero
+   bddl_files: /home/ubuntu/LIBERO/libero/libero/bddl_files
+   init_states: /home/ubuntu/LIBERO/libero/libero/init_files
+   datasets: /home/ubuntu/LIBERO/libero/datasets
+   assets: /home/ubuntu/LIBERO/libero/libero/assets
+   EOF
+   ```
+
+3. **`MUJOCO_GL=egl` is mandatory, and it fails silently.** The instance has no
+   display. Without it, rendering either errors on GL init or — worse — returns
+   an all-black image that passes every shape assertion. **Always assert on pixel
+   content, never on shape.** Put `export MUJOCO_GL=egl` in `~/.bashrc`.
+
+### torch: 2.4.1 kept, README's 1.11.0+cu113 NOT installed
+
+`requirements.txt` does not pin torch, so pip resolved **torch 2.4.1+cu121**
+(pulled by `robomimic`). LIBERO's README then says to install `1.11.0+cu113`.
+**We tested 2.4.1 first and it works**, so the downgrade was skipped — see
+`DECISIONS.md` 2026-08-04.
+
+Note `gym 0.25.2` emits an unmaintained/NumPy-2.0 warning on import. Harmless
+here — numpy is pinned to 1.22.4.
+
+### Done-when test — passed 2026-08-04
+
+Importing `libero` proves nothing (as with DP in Step 1). The real test builds an
+env, resets, and **asserts on pixel content**:
+
+```python
+import os; os.environ["MUJOCO_GL"] = "egl"
+import numpy as np, torch
+from libero.libero import benchmark, get_libero_path
+from libero.libero.envs import OffScreenRenderEnv
+bd = benchmark.get_benchmark_dict()["libero_object"]()
+task = bd.get_task(0)
+bddl = os.path.join(get_libero_path("bddl_files"), task.problem_folder, task.bddl_file)
+env = OffScreenRenderEnv(bddl_file_name=bddl, camera_heights=128, camera_widths=128)
+env.seed(0); obs = env.reset()
+assert obs["agentview_image"].mean() > 1.0, "BLACK FRAME — EGL not working"
+env.step(np.zeros(7)); print(env.get_sim_state().shape)
+```
+
+Observed 2026-08-04:
+
+| | |
+|---|---|
+| torch | `2.4.1+cu121`, `cuda avail: True`, `NVIDIA A10G` |
+| task 0 | `pick_up_the_alphabet_soup_and_place_it_in_the_basket` |
+| `agentview_image` | `(128,128,3) uint8`, **mean pixel 138.5** — real geometry, not black |
+| `robot0_eye_in_hand_image` | `(128,128,3)` |
+| obs keys | `agentview_image`, `robot0_eye_in_hand_image`, `object-state`, `robot0_gripper_qpos`, `robot0_proprio-state` |
+| `env.step(np.zeros(7))` | OK — confirms 7-dim action |
+| **`get_sim_state()`** | **`(110,)` float** — `intermediate_state_ref` confirmed cheap and implementable |
+| env build + first reset | **8.0 s** |
+
+`get_sim_state()` returning a 110-float vector is the concrete confirmation of the
+deferred Tier-2 decision: a per-step state snapshot is ~880 bytes, not ~100× that
+for rendered frames.
+
+### Connecting
+
+`~/.ssh/config` on the laptop (key at `~/.ssh/libero-gpu.pem`, mode `400`):
+
+```
+Host libero-gpu
+    HostName <public-ip>          # changes on every stop/start unless an EIP is attached
+    User ubuntu
+    IdentityFile ~/.ssh/libero-gpu.pem
+    StrictHostKeyChecking accept-new
+    ServerAliveInterval 60
+```
+
+Security group allows SSH from `0.0.0.0/0` **deliberately** — work happens from
+multiple networks and `My IP` breaks on every ISP lease change. Key-only auth
+(password auth is off by default on this AMI) is what carries the security here.
+
+### Billing discipline — this is now the binding constraint
+
+- **Running bills on uptime, not utilization.** An idle instance costs the same
+  as one training. ~$1.21/hr list ⇒ **~$29/day**, **~$203/week** = the whole credit.
+- **Stopped still bills EBS**: 100 GiB gp3 ≈ **$8/month ≈ $0.26/day**, and EBS is
+  billed on *provisioned*, not used, capacity.
+- **Terminate — don't just stop — once GPU work ends (~November).** Stopped from
+  August to January is ~$45 of a $200 credit for a box doing nothing. Phases 3
+  and 5 need no GPU at all.
+- On teardown, confirm **Volumes**, **Snapshots**, and **Elastic IPs** are all
+  empty. Orphaned volumes bill forever with no instance attached and nothing in
+  the console flagging it.
+- Session cost reference: **install from launch to verified env = 21 min ≈ $0.42.**
+
 ## Backing up raw results
 
 **The rollout is one-shot and the grid cannot be re-run after January, so the raw
