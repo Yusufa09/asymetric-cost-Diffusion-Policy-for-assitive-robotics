@@ -60,6 +60,113 @@ Log hours per session — it feeds the ISEF forms and tracks against the
 
 ---
 
+## 2026-08-04 — GPU instance live; LIBERO renders headless; `n_envs` question closed.  (~1.5 hrs)
+
+**Goal:** Launch the `g5.2xlarge`, install the LIBERO env, pull `libero_object`,
+and measure before training anything.
+
+**Did.** Launched `g5.2xlarge` in `us-east-1` on `ami-04496a4d4cc3ce989` (*Deep
+Learning Base AMI with Single CUDA, Ubuntu 24.04*), 100 GiB gp3, SSH from
+`0.0.0.0/0` with key-only auth (deliberate — `My IP` breaks on every ISP lease
+change and work happens from multiple networks). Installed miniconda, created a
+`python=3.8.13` env, cloned LIBERO at `8f1084e`, installed requirements, and
+verified end-to-end. Full procedure and every workaround in `SETUP.md` § Step 5.
+
+**Two traps *before* the shell even existed**, both worth the time they cost:
+
+1. **Searching "Deep Learning Base OSS" lands in AWS Marketplace**, which returns
+   third-party repackages ("Galaxys Cloud") carrying **$2.40–3.20/hr of software
+   surcharge on top of EC2** — roughly triple the burn rate. Official AWS images
+   are owned by `amazon` with no software cost line.
+2. **The post-2025-07 AWS Free Plan blocks GPU instance types outright.**
+   `g5.2xlarge` is not launchable on it; upgrading to Paid is mandatory. Credits
+   carry over and are spent before the card — **but the Free Plan's
+   auto-close-at-depletion was the only structural protection, and upgrading
+   removes it.** The card on file is not mine. This makes the still-unconfigured
+   Budgets alarm materially more dangerous than it was yesterday, and it is why
+   a Budgets *Action* (auto-stop EC2, actual enforcement) now belongs in STATUS
+   rather than an email alarm.
+
+**Observed.**
+
+- **Env verified working, and the assertion that matters is pixel content, not
+  shape.** `agentview_image (128,128,3) uint8` with **mean pixel 138.5** — EGL
+  failing silently returns an all-black frame that passes every shape check.
+  `env.step(np.zeros(7))` OK. `get_sim_state()` → **`(110,)` float**, confirming
+  `intermediate_state_ref` is ~880 B/step rather than ~100× that for frames. Env
+  build + first reset **8.0 s**. torch **2.4.1+cu121**, `cuda avail: True`, A10G.
+- **`libero_object` demos: 7.0 GB**, 10 HDF5 files (~660–805 MB each), <2 min to
+  download. Disk 37 G of 96 G. **100 GiB root was correct — 34 GiB would have
+  failed.**
+- **50 demos per task — now measured, not "commonly cited."** Trajectory length
+  min 136 / max 196 / **mean 156.2** ⇒ ~7,808 steps per task, ~78k per suite.
+  Per-demo structure is **robomimic format**, which matters for the next step.
+- **Env throughput, 100 steps/config, zero-action, no policy:**
+
+  | `n_envs` | total steps/s | speedup |
+  |---|---|---|
+  | 1 | 65.3 | 1.00× |
+  | 4 | 214.0 | 3.28× |
+  | **8** | **233.2** | **3.57×** |
+  | 16 | 231.0 | 3.54× |
+
+  **Saturates exactly at the vCPU count** (8 on `g5.2xlarge`) — MuJoCo physics is
+  CPU-bound. **This reverses the PushT/CPU conclusion, as `SETUP.md` § Step 2
+  explicitly predicted it would**: on CPU small `n_envs` won by 1.68×; here
+  parallel wins by 3.57×. The deferred `n_envs` question is closed.
+- **Gate-run projection (env time only, `n_envs=8`):** 10 tasks × 50 eps ≈
+  **14–22 min ≈ $0.29–0.43**; 3 tasks × 50 ≈ 4–6 min. **So evaluating the full
+  suite instead of 3 tasks costs ~15 extra minutes, not hours** — the reproduction
+  check against 92.5% and the free per-task readout are effectively free. That
+  independently confirms the gate-scope decision on cost grounds.
+- **Cost: instance ran 35 min ≈ $0.71** — launch 21:22, stopped 21:57 EDT. Of
+  that, launch → verified env was 21 min ≈ $0.42; the rest was the dataset pull
+  and the `n_envs` sweep. **≈0.4% of the $200 credit.** Session wall-clock was
+  ~1.5 hr, but the meter only runs from launch, not from opening the console.
+- **First real $/hr data point.** 35 min of `g5.2xlarge` against list ~$1.21/hr.
+  **Verify against Cost Explorer once the charge posts** — `PLAN.md` §10 and every
+  feasibility estimate still rest on the *unverified* ~$1.5/hr figure, and this is
+  the first run that can falsify it.
+
+**Broke / dead ends.** Four, all now documented in `SETUP.md`:
+
+1. **Anaconda ToS blocks `conda create`** on the default channels. Fixed with
+   `-c conda-forge --override-channels` rather than accepting the agreement —
+   conda-forge has no commercial-use restriction and needed no license decision.
+2. **⚠ LIBERO calls `input()` on first import** (`libero/libero/__init__.py:71`,
+   "specify a custom dataset path?"). Over non-interactive SSH this **hangs with
+   no output** — it reads as a crash, not a prompt. Fixed by pre-writing
+   `~/.libero/config.yaml`. The dataset downloader has a *second* `input()`;
+   `--use-huggingface` skips it and is the better source anyway, since the script
+   itself warns the original links "may expire soon."
+3. **`SubprocVectorEnv` dies under `fork`** — EGL contexts don't survive it, and
+   the parent only ever sees `ConnectionResetError: [Errno 104]` from
+   `venv.py:474` while the child's real error is swallowed. ~15 min to diagnose.
+   Fixed with `mp.set_start_method("spawn", force=True)` plus an
+   `if __name__ == "__main__":` guard. **This must go into the `src/` rollout
+   harness, not just benchmark scripts** — the Phase-2 grid needs vectorised
+   rollouts.
+4. **Self-inflicted:** named a probe script `/tmp/inspect.py`, shadowing the
+   stdlib `inspect` that numpy imports. Same class of trap `SETUP.md` already
+   records for `src/logging/` vs stdlib `logging`. Two minutes.
+
+**Decided.** Keep **torch 2.4.1+cu121**; do *not* install the README's
+`1.11.0+cu113`. Tested before accepted, and a 2022 stack on Ampere converts
+directly into fewer rollouts against a ~130 GPU-hr budget. Downgrade remains the
+first diagnostic if the gate misses its band. See `DECISIONS.md`.
+
+**Next — and it is not what the plan assumed.** There is **no DP-on-LIBERO
+training path**. LIBERO's `lifelong/` framework trains BC-RNN / BC-Transformer /
+ViT-T, not Diffusion Policy; vendored DP supports pusht / robomimic / kitchen /
+blockpush, not LIBERO. The promising lead is that **LIBERO demos are
+robomimic-format HDF5**, which is exactly what DP's
+`train_diffusion_unet_image_workspace` consumes — so this is plausibly a
+config/adapter job (`shape_meta`, obs-key mapping, action normalization) rather
+than a new trainer. Unverified. **Do that reading with the instance stopped** —
+it needs no GPU and costs nothing.
+
+---
+
 ## 2026-08-02 — LIBERO audited without installing it. Three planned tasks don't exist; no DP checkpoint does either.  (~2.5 hrs)
 
 **Goal:** Close the two Week-2 carryover items — verify the 3 LIBERO task IDs, and

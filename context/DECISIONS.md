@@ -10,6 +10,43 @@ if it changes downstream work.
 
 ---
 
+## 2026-08-04 — Keep torch 2.4.1+cu121 on LIBERO; do not install the README's 1.11.0+cu113
+
+**What.** The LIBERO conda env runs **torch 2.4.1+cu121**. LIBERO's README
+instructs `pip install torch==1.11.0+cu113` after `requirements.txt`; that step
+was **deliberately skipped**. `requirements.txt` does not pin torch, so pip
+resolved 2.4.1 as a `robomimic` dependency, and the resulting stack was tested
+and works.
+
+**Why.**
+
+1. **It was verified before it was accepted.** The done-when test
+   (`SETUP.md` § Step 5) built a `libero_object` env, reset, rendered both
+   128×128 cameras with mean pixel 138.5, stepped a 7-dim action, and returned a
+   110-float sim state. Nothing was assumed.
+2. **Speed is a budget question, not a preference.** torch 1.11 predates
+   meaningful Ampere optimisation. The A10G is sm_86 and the credit buys ~130
+   GPU-hr *estimated*; a slower stack converts directly into fewer rollouts.
+3. **Downgrading is cheap and reversible** — one pip command, ~3 minutes — so
+   testing forward first strictly dominates reverting blind.
+4. The system CUDA (13.2) is irrelevant either way: pip's torch wheels bundle
+   their own CUDA runtime, so only the **driver** (595.71.05) has to be new
+   enough, and it is by a wide margin.
+
+**Consequences.**
+
+- **Our numbers are not bit-comparable to any published LIBERO result**, which
+  used the pinned stack. This costs nothing for the Phase-0 gate — that compares
+  a *success rate* against 92.5%, not trajectories — but it means an exact
+  trajectory-level reproduction is not available as a debugging tool.
+- **If the gate misses its ±5 band, the torch version is a suspect** and
+  reverting to `1.11.0+cu113` is the first diagnostic to run, before concluding
+  anything about the policy or the env.
+- The env is pinned by *record*, not by lockfile. `SETUP.md` § Step 5 lists the
+  exact resolved versions; if this env breaks in November, suspect an unpinned
+  transitive dependency drifting — the same failure mode that hit `robodiff`'s
+  `huggingface_hub` in July.
+
 ## 2026-08-02 — LIBERO platform is the `libero_object` suite, per-suite training, one run
 
 **What.** The three LIBERO tasks come from **`libero_object`**, trained as a

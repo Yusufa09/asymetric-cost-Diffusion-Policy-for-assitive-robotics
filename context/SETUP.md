@@ -645,6 +645,89 @@ Security group allows SSH from `0.0.0.0/0` **deliberately** — work happens fro
 multiple networks and `My IP` breaks on every ISP lease change. Key-only auth
 (password auth is off by default on this AMI) is what carries the security here.
 
+### Workaround 4 — `SubprocVectorEnv` requires `spawn`, not `fork`
+
+**EGL contexts do not survive `fork`.** mujoco initializes EGL at import time in
+the parent; `SubprocVectorEnv` then forks, and every child dies on its first
+render. The symptom is **not** a useful error — the parent raises
+`ConnectionResetError: [Errno 104] Connection reset by peer` from
+`venv.py:474`, with the child's actual failure never surfacing. Cost ~15 min to
+diagnose.
+
+```python
+import multiprocessing as mp
+if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)
+```
+
+The vector-env construction must also sit behind `if __name__ == "__main__":`,
+because `spawn` re-imports the module in every child. `SubprocVectorEnv` wraps
+its factories in `CloudpickleWrapper`, so lambdas are still fine.
+
+**This must be carried into the rollout harness in `src/`,** not just benchmark
+scripts — the Phase-2 grid depends on vectorised rollouts working.
+
+### `libero_object` demo data — MEASURED 2026-08-04
+
+```bash
+python benchmark_scripts/download_libero_datasets.py --datasets libero_object --use-huggingface
+```
+
+**Use `--use-huggingface`.** Without it the script prompts interactively (another
+`input()` — same hang as workaround 2) *and* defaults to the original UT-Austin
+links, which the script's own message says "may expire soon." For a project
+running to March 2027 the HF mirror is the safer source. Also note
+`--datasets` **defaults to `all`** — running it bare pulls ~100 GB.
+
+| | |
+|---|---|
+| download size | **7.0 GB**, 10 HDF5 files, ~660–805 MB each |
+| download time | **< 2 minutes** on EC2 |
+| disk after | 37 G used of 96 G — **100 GiB root was correct; 34 GiB would have failed** |
+| **demos per task** | **50** — previously "commonly cited, unverified" |
+| trajectory length | min 136, max 196, **mean 156.2** (≈7,808 steps/task, ≈78k/suite) |
+| per-demo keys | `actions (T,7) f8`, `dones`, `rewards`, `states`, `robot_states`, `obs` |
+| obs in demos | `agentview_rgb`, `eye_in_hand_rgb` (T,128,128,3) uint8; `gripper_states` (2), `joint_states` (7), `ee_pos`/`ee_ori` (3), `ee_states` (6) |
+
+### Env throughput — MEASURED 2026-08-04. The `n_envs` question is closed.
+
+100 steps/config, zero-action, `libero_object` task 0, 128×128 dual camera,
+**no policy in the loop** — this is the env-only floor (physics + render).
+
+| `n_envs` | build (s) | **total steps/s** | per-env steps/s | speedup |
+|---|---|---|---|---|
+| 1 | 3.0 | 65.3 | 65.3 | 1.00× |
+| 4 | 6.1 | 214.0 | 53.5 | 3.28× |
+| **8** | 8.9 | **233.2** | 29.1 | **3.57×** |
+| 16 | 20.5 | 231.0 | 14.4 | 3.54× |
+
+**Use `n_envs=8`.** Throughput saturates exactly at the vCPU count — MuJoCo
+physics is CPU-bound and `g5.2xlarge` has 8 vCPU. n=16 buys nothing and triples
+build time.
+
+> **This reverses the PushT/CPU conclusion, as § Step 2 predicted it would.** On
+> CPU, small `n_envs` won by ~1.68×. On the A10G, parallel wins by 3.57×. The
+> earlier caveat — *"on GPU the tradeoff very likely reverses; measure, don't
+> assume"* — is now confirmed rather than suspected.
+
+**Gate-run projection (env time only, `n_envs=8`):**
+
+| scope | @400 max-steps | @600 max-steps |
+|---|---|---|
+| 3 tasks × 50 eps | 4.3 min (~$0.09) | 6.4 min (~$0.13) |
+| **10 tasks × 50 eps (full suite)** | **14.3 min (~$0.29)** | **21.5 min (~$0.43)** |
+
+**This settles the Phase-0 gate scope question on cost grounds.** Evaluating all
+10 tasks rather than 3 costs ~10–15 extra minutes of env time, not hours — so the
+reproduction check against the published 92.5% and the free per-task readout are
+effectively free. Take them.
+
+**⚠ Caveat that keeps this honest: policy inference is NOT in these numbers.**
+No trained policy exists yet. On PushT, inference dominated wall-clock entirely
+(`SETUP.md` § Step 2). A diffusion policy denoising every `n_action_steps` will
+add materially to this, and the figures above are a **floor, not a forecast**.
+Re-measure with the real policy in the loop before trusting any grid projection.
+
 ### Billing discipline — this is now the binding constraint
 
 - **Running bills on uptime, not utilization.** An idle instance costs the same

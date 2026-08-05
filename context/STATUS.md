@@ -8,7 +8,7 @@ instant it closes** — not archived here. History lives in `LOG.md` and
 force is closure. Sections are ordered by how often they change, so a routine
 session only rewrites the top.
 
-_Last updated: 2026-08-02_
+_Last updated: 2026-08-04_
 
 ---
 
@@ -49,26 +49,39 @@ more than hitting an arbitrary Friday. What must not slip is the gate's *content
 
 ## The single next concrete action
 
-**Configure Budgets alarms on credit balance (~10 min), then launch and
-measure — do not start a training run first.**
+**Work out how to train Diffusion Policy on `libero_object` — there is no
+existing path, and this is the last unknown before the gate.**
 
-The first GPU session's job is **one rollout timed and one training epoch timed**,
-~20 minutes. This replaces the two estimates the entire feasibility argument rests
-on (~$1.5/hr, ~130 GPU-hr), and settles the `n_envs`-on-GPU question. Committing
-to a full training run before knowing what a run costs is how the credit gets
-spent on the wrong thing.
+The env is up and measured (`SETUP.md` § Step 5). What does *not* exist is a
+DP-on-LIBERO training setup:
 
-Order: alarms → launch → install LIBERO env → pull `libero_object` **only** →
-measure → then train.
+- **LIBERO's own `lifelong/` framework trains BC-RNN / BC-Transformer / ViT-T**,
+  not Diffusion Policy. Its `libero.lifelong.main` entrypoint is not usable as-is.
+- **Vendored DP supports pusht / robomimic / kitchen / blockpush** — not LIBERO.
+
+**The promising lead: LIBERO demos are robomimic-format HDF5.** Verified structure
+is `data/demo_N/{actions, obs, dones, rewards, states, robot_states}`, which is
+exactly what DP's `train_diffusion_unet_image_workspace` + robomimic dataset path
+consumes. So this is probably a config/adapter job — `shape_meta`, obs-key
+mapping, action normalization — not a from-scratch trainer. **Probably. Unverified.**
+
+Do this reading **with the instance stopped** — it costs nothing and needs no GPU.
 
 ## Blocked / at risk
 
-- **⚠ Budgets alarms are still not configured, and the AWS appeal text says they
-  are.** Both submitted appeals assert *"I have Budgets alarms set on the credit
-  balance"* as part of the risk argument that won the quota. They are not set.
-  **Hard gate on launching any instance** — one `g5.2xlarge` left running drains
-  $200 in under six days. ~10 minutes to close. Alarm on credit *balance*, not
-  just spend. **Carried unmet since 2026-07-31.**
+- **⚠⚠ Budgets alarms STILL not configured — and the account is now on the Paid
+  Plan, which removed the only structural protection.** Both submitted appeals
+  assert *"I have Budgets alarms set on the credit balance"*. They are not set.
+  **Carried unmet since 2026-07-31, and materially more dangerous as of
+  2026-08-04.** The Free Plan blocked GPU instance types entirely and auto-closed
+  the account at credit depletion, so overspend was *impossible*. Upgrading to
+  Paid (required to launch `g5.2xlarge` at all) means that past $200 **the card on
+  file — which is not mine — gets charged.** At ~$29/day a forgotten week is ~$200
+  of someone else's money.
+  - A cost budget must **exclude credits** from its calculation, or it reads
+    $0.00 until the credits are gone — precisely too late.
+  - An alarm only emails. **A Budgets _Action_ that auto-stops EC2 at ~90% is the
+    only guard that enforces**, and it is the one that works while asleep.
 - **Phase 0 is now a training task, not a download-and-evaluate task.** No released
   DP-on-LIBERO checkpoint was found (searched OpenVLA-OFT and the LeRobot hub,
   2026-08-02). Scope as *not found*, not *proven absent*. This is the single
@@ -85,10 +98,10 @@ measure → then train.
   the Phase-2 grid. Accounts 2 and 3 are a planned step, each repeating the ~2-day
   quota appeal. **Both numbers in this bullet are estimates** — the measurement
   above is what replaces them.
-- **⚠ Disk on the instance, not the laptop.** Laptop is fine: LIBERO code is 650 MB
-  and 28 GB is free. **The `libero_object` demo HDF5 size is unverified** — do
-  **not** run `download_libero_datasets.py` bare; pass `--datasets libero_object`.
-  Demo data belongs on the instance.
+- **Disk — resolved, no longer a risk.** `libero_object` demos measured at
+  **7.0 GB** (10 files); instance sits at 37 G of 96 G used. The 100 GiB root was
+  correct. Still **never run `download_libero_datasets.py` bare** — `--datasets`
+  defaults to `all` (~100 GB). Always `--datasets libero_object --use-huggingface`.
 
 ## Open decisions — mine to make
 
@@ -156,10 +169,6 @@ Parked deliberately, with the reason and when it comes back. Not forgotten.
   distributions. **Returns: Phase 3.**
 - **Second detector signal** (chunk magnitude, ActProbe-style). Only if inter-chunk
   consistency separates weakly. **Returns: Week 9.**
-- **Optimal `n_envs` on GPU.** CPU measurement favours small `n_envs` by ~1.68×
-  (25.5% straggler waste × 1.25× batch inefficiency). **This very likely reverses
-  on an A10G starved at batch 1.** Measure, don't assume; never infer throughput
-  from CPU%. **Returns: first LIBERO GPU run — i.e. the next one.**
 - **Custom cross-suite 3-task policy.** Verified *correct* on 2026-08-02 —
   `libero_object` is a floor scene, Spatial/Goal are tabletop with different
   fixtures, so three hand-picked tasks would be visually disambiguable with real
@@ -233,12 +242,17 @@ Easy to skip, costly to skip.
       must be built. `DECISIONS.md` 2026-08-02
 - [x] Suite decision closed — `libero_object`, per-suite training
 - [x] Phase-0 gate criterion rewritten and band declared — `PLAN.md` §7
-- [ ] **Budgets alarms** — blocking everything below
-- [ ] Launch `g5.2xlarge`; install the LIBERO conda env; record what actually
-      worked in `SETUP.md`
-- [ ] Pull `libero_object` demos **only** (`--datasets libero_object`); record the
-      real size
-- [ ] **Time one rollout + one training epoch** before training anything
+- [ ] **Budgets alarms + Budgets Action (auto-stop EC2)** — still unmet, now
+      higher stakes on the Paid Plan. See Blocked.
+- [x] Launched `g5.2xlarge` (`ami-04496a4d4cc3ce989`, A10G 23 GB, driver
+      595.71.05, 100 GiB gp3); LIBERO conda env installed and **verified rendering
+      headless** — `SETUP.md` § Step 5, four workarounds recorded
+- [x] Pulled `libero_object` demos only — **7.0 GB**, 10 files, **50 demos/task**,
+      mean traj 156.2 steps
+- [x] **Env throughput measured — `n_envs=8` optimal, 233.2 steps/s.** Reverses
+      the PushT/CPU finding exactly as § Step 2 predicted
+- [ ] **Time one training epoch** — blocked on the item below, not on GPU access
+- [ ] **Build the DP-on-LIBERO training path** (no existing one — see next action)
 - [ ] Train DP on `libero_object`
 
 **Queued**
@@ -259,6 +273,11 @@ Easy to skip, costly to skip.
 
 Full archive with reasoning in `DECISIONS.md`.
 
+- **2026-08-04** — Keep torch **2.4.1+cu121** on LIBERO; skip the README's
+  `1.11.0+cu113`. Verified working before accepting it, and a 2022 stack on
+  Ampere converts directly into fewer rollouts against a ~130 GPU-hr budget.
+  Cost: our numbers are not bit-comparable to published LIBERO results, so if the
+  gate misses its ±5 band, reverting torch is the first diagnostic.
 - **2026-08-02** — LIBERO platform is the `libero_object` suite, per-suite
   training, one run; the three tasks are picked from measured per-task rates at
   the gate, not named in advance. Decided on budget first, then on the fact that
