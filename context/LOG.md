@@ -155,6 +155,29 @@ verified end-to-end. Full procedure and every workaround in `SETUP.md` § Step 5
 directly into fewer rollouts against a ~130 GPU-hr budget. Downgrade remains the
 first diagnostic if the gate misses its band. See `DECISIONS.md`.
 
+**Gap found in the post-session audit, and it is the honest kind.** Asked whether
+everything had been captured, and checking properly turned up something I had
+decided silently: **the logging code has never run against the LIBERO path.**
+`SPEC.md` § Instrument-from-day-one is satisfied in letter — tonight's `n_envs`
+sweep was a zero-action step-rate benchmark with no policy, no episodes and no
+success flags, so Table A has no row shape for it, and those numbers correctly
+live in `SETUP.md`. But the rule's *second* stated reason is "it dry-runs the
+logging code on throwaway data so bugs surface now rather than on the real grid,"
+and that was missed. Worse: **this repo is not even on the instance** — only
+LIBERO is — so `src/logging/rows.py` has still only ever executed on PushT, on
+CPU, under `robodiff`, against a different obs space and action dim with no
+subprocess workers. The first time the emitter meets LIBERO would otherwise have
+been during a gate run that is paid for and not repeatable.
+
+Written in response: **`src/rollout/smoke_libero.py`** — a random-policy LIBERO
+rollout whose only job is to make the emitter run. Not an evaluation; its success
+rate is meaningless. It bakes in the `spawn` fix and the `MUJOCO_GL` ordering, and
+encodes two schema choices consistent with prior decisions: `success_flag =
+max_reward >= 1.0` with the float logged alongside (as PushT, 2026-07-29), and
+`total_denoising_passes = 0` / `total_replans = episode_length`, which are
+*measured* for a random policy rather than plausible fill-ins. **Written but not
+yet run** — the instance was already stopped. ~1 min of GPU on next start.
+
 **Next — and it is not what the plan assumed.** There is **no DP-on-LIBERO
 training path**. LIBERO's `lifelong/` framework trains BC-RNN / BC-Transformer /
 ViT-T, not Diffusion Policy; vendored DP supports pusht / robomimic / kitchen /

@@ -251,6 +251,13 @@ Easy to skip, costly to skip.
       mean traj 156.2 steps
 - [x] **Env throughput measured — `n_envs=8` optimal, 233.2 steps/s.** Reverses
       the PushT/CPU finding exactly as § Step 2 predicted
+- [ ] **Record the instance ID** in `SETUP.md` § Step 5 (currently `TBD`)
+- [ ] **Get this repo onto the instance** — it has LIBERO only, so
+      `src/logging/rows.py` is not even present there
+- [ ] **Run `src/rollout/smoke_libero.py`** on the next instance start, before
+      anything expensive. **The logger has never executed against the LIBERO
+      path** — only PushT/CPU/`robodiff`. Written 2026-08-04, not yet run. ~1 min
+      of GPU. See `SETUP.md` § "The analysis repo is NOT on the instance"
 - [ ] **Time one training epoch** — blocked on the item below, not on GPU access
 - [ ] **Build the DP-on-LIBERO training path** (no existing one — see next action)
 - [ ] Train DP on `libero_object`

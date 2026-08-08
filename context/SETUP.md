@@ -511,6 +511,7 @@ ones that *actually ran*, including three workarounds the README does not mentio
 | | |
 |---|---|
 | type | `g5.2xlarge`, `us-east-1` |
+| **instance ID** | `TBD` — read off EC2 → Instances and record it. The Name tag `libero-gpu` is enough to restart from the console, but the ID is what AWS CLI and support cases key on |
 | AMI | `ami-04496a4d4cc3ce989` — *Deep Learning Base AMI with Single CUDA (Ubuntu 24.04)* |
 | GPU | **NVIDIA A10G, 23028 MiB**, driver `595.71.05` |
 | CUDA (system) | 13.2 — **irrelevant**, pip's torch bundles its own runtime; only the driver version matters |
@@ -727,6 +728,56 @@ No trained policy exists yet. On PushT, inference dominated wall-clock entirely
 (`SETUP.md` § Step 2). A diffusion policy denoising every `n_action_steps` will
 add materially to this, and the figures above are a **floor, not a forecast**.
 Re-measure with the real policy in the loop before trusting any grid projection.
+
+### ⚠ The analysis repo is NOT on the instance — and the logger has never run there
+
+As of 2026-08-04 the instance has **LIBERO only**. This repo — and therefore
+`src/logging/rows.py` — has never executed against the LIBERO path. The emitter
+has only ever run on PushT, on CPU, under `robodiff`: a different observation
+space, a different action dim, and no vectorised subprocess workers.
+
+**`SPEC.md` § Instrument-from-day-one is satisfied in letter but not in spirit.**
+The 2026-08-04 `n_envs` sweep was a zero-action step-rate microbenchmark with no
+policy, no episodes and no success flags, so Table A — which is per-episode and
+keyed on `condition` / `disturbance_type` / `success_flag` — genuinely has no row
+shape for it, and those numbers belong in this file. But the rule's *second*
+stated reason is "it dry-runs the logging code on throwaway data so bugs surface
+now rather than on the real grid," and that was missed. The first time the emitter
+meets LIBERO must not be during a gate run you are paying for and cannot repeat.
+
+**Fix, on the next instance start, before anything expensive:**
+
+```bash
+# 1. get the repo onto the box (SSH agent forwarding, or a read-only deploy key)
+git clone <repo-url> ~/asymetric-cost-dp
+# 2. the logger needs omegaconf; it is already in the libero env via hydra-core
+# 3. dry-run the emitter against the real obs/action space
+cd ~/asymetric-cost-dp
+MUJOCO_GL=egl ~/miniconda3/envs/libero/bin/python src/rollout/smoke_libero.py \
+    --n-episodes 4 --n-envs 2 --max-steps 100
+```
+
+`src/rollout/smoke_libero.py` runs a **random** policy — it is not an evaluation
+and its success rate is meaningless. What it proves is that rows validate against
+`TABLE_A_FIELDS`, that `git_commit` and `config_hash` resolve on the instance, and
+that `spawn` + `SubprocVectorEnv` + the emitter coexist. Costs ~1 minute of GPU.
+
+Two schema decisions it encodes, both additive and consistent with prior ones:
+
+- **`success_flag` = `max_reward >= 1.0`**, with `max_reward` logged as a float
+  alongside it. Same treatment as PushT (`DECISIONS.md` 2026-07-29) so every
+  success threshold stays recomputable. **Assumption to verify against a real
+  policy: LIBERO's reward is sparse 0/1.** A random policy will almost certainly
+  score 0.0 everywhere, so the smoke test cannot confirm this — it only confirms
+  the plumbing.
+- **`total_denoising_passes` = 0, `total_replans` = `episode_length`.** A random
+  policy performs no denoising and is re-queried every step. Both are *measured*,
+  not estimated — `SPEC.md` forbids plausible-looking fill-ins, and `null` would
+  be wrong here because the true value is known.
+
+Rows land in `logs/table_a.jsonl` **on the instance**, which is not the same file
+as the laptop's. Pull them down before stopping, or they sit on a volume that
+gets deleted at teardown.
 
 ### Billing discipline — this is now the binding constraint
 
